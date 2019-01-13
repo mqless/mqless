@@ -1,0 +1,12 @@
+#   mqless configuration
+
+server
+    timeout = 10000         #   Client connection timeout, msec
+    background = 0          #   Run as background process
+    verbose = 0             #   Do verbose logging of activity?
+    bind = tcp://*:34543    #   Bind addressbind = tcp://*:34543    #   Bind address
+
+aws
+    access_key = "AKIDEXAMPLE"
+    secret = "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY"
+    region = "us-east-1"

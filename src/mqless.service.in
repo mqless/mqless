@@ -1,0 +1,21 @@
+# This is a skeleton created by zproject.
+# You can add hand-written code here.
+
+[Unit]
+Description=mqless service
+After=network.target
+# Requires=network.target
+# Conflicts=shutdown.target
+# PartOf=mqless.target
+
+[Service]
+Type=simple
+# User=@uid@
+Environment="prefix=@prefix@"
+Environment='SYSTEMD_UNIT_FULLNAME=%n'
+ExecStart=@prefix@/bin/mqless @sysconfdir@/@PACKAGE@/mqless.cfg
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+# WantedBy=mqless.target

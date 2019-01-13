@@ -1,0 +1,33 @@
+<project
+    name = "mqless" description = "Serverless Message Broker"
+    prefix = "mql"
+    script = "zproject.gsl"
+    email = "somdorom@gmail.com"
+    repository = "https://github.com/somdoron/mqless"
+    url = "https://github.com/somdoron/mqless"
+    license = "MPL-2.0" >
+
+<!-- NOTE: For proper regeneration, parent directory should contain
+     fresh checkouts of ../czmq and ../libzmq projects first -- and
+     there should be no confusing variations with similar names! -->
+
+    <include filename = "src/license.xml" />
+    <version major = "0" minor = "1" />
+    <abi current = "0" revision = "1" age = "0" />
+    <use project = "czmq" />
+
+    <target name = "travis" />
+    <target name = "docker" />
+
+    <main name = "mqless" service = "1" />
+    <main name = "mqless_client" />
+
+    <class name = "aws" private = "1" state = "stable">AWS client</class>
+    <class name = "aws_sign" private = "1" state = "stable">AWS signature</class>
+    <class name = "mailbox" private = "1" selftest = "0" state = "stable">actor mailbox</class>
+
+    <extra name = "foreign/sha256.h" />
+    <extra name = "foreign/sha256.inc_c" />
+
+    <class name = "mql_server">mqless server implementation</class>
+</project>
