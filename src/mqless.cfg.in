@@ -1,10 +1,7 @@
 #   mqless configuration
 
 server
-    timeout = 10000         #   Client connection timeout, msec
-    background = 0          #   Run as background process
-    verbose = 0             #   Do verbose logging of activity?
-    bind = tcp://*:34543    #   Bind addressbind = tcp://*:34543    #   Bind address
+    port = 34543            #   The port mqless http server will listen on
 
 aws
     access_key = "AKIDEXAMPLE"

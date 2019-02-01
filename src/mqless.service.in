@@ -4,7 +4,7 @@
 [Unit]
 Description=mqless service
 After=network.target
-# Requires=network.target
+Requires=network.target
 # Conflicts=shutdown.target
 # PartOf=mqless.target
 

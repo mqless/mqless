@@ -13,7 +13,7 @@ int main (int argc, char **argv) {
     const char *aws_access_key = NULL;
     const char *aws_secret = NULL;
     const char *aws_region = NULL;
-    int port = -1;
+    const char* port = NULL;
 
     for (const char* value = zargs_param_first (args); value != NULL; value = zargs_param_next (args)) {
         const char* name = zargs_param_name (args);
@@ -27,7 +27,7 @@ int main (int argc, char **argv) {
         else if (streq (name, "--aws-region"))
             aws_region = value;
         else if (streq (name, "--port") || streq(name, "-p"))
-            port = atoi (value);
+            port = value;
         else if (streq (name, "--help") || streq (name, "-h")) {
             puts ("Usage: mqless [options...]");
             puts (" -c, --config <file>\t\t\tLoad config-file");
@@ -58,26 +58,26 @@ int main (int argc, char **argv) {
     zconfig_t *config = zconfig_load (config_file);
     if (!config) {
         config = zconfig_new ("root", NULL);
-        zconfig_put (config, "server/verbose", "0");
-        zconfig_put (config, "server/timeout", "5000");
-        zconfig_put (config, "server/bind", "tcp://*:34543");
-        zconfig_put (config, "aws/access_key", "access_key");
-        zconfig_put (config, "aws/secret", "secret");
-        zconfig_put (config, "aws/region", "us-west-2");
+        zconfig_put (config, "server/port", "34543");
+        zconfig_put (config, "aws/access_key", "AKIDEXAMPLE");
+        zconfig_put (config, "aws/secret", "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY");
+        zconfig_put (config, "aws/region", "us-east-1");
+
+        zconfig_save (config, config_file);
 
         return 0;
     }
 
-    mql_server_t *server = mql_server_new (config);
-    //zstr_send (server, "VERBOSE");
+    if (aws_access_key && aws_region && aws_secret) {
+        zconfig_put (config, "aws/access_key", aws_access_key);
+        zconfig_put (config, "aws/secret", aws_secret);
+        zconfig_put (config, "aws/region", aws_secret);
+    }
 
-//    if (aws_access_key && aws_region && aws_secret)
-//        zstr_sendx (server, "SET_AWS", aws_access_key, aws_secret, aws_region, NULL);
-//
-//    if (!bind)
-//        bind = zconfig_get (config, "server/bind", "tcp://*:34543");
-//
-//    zstr_sendx (server, "BIND", bind, NULL);
+    if (port)
+        zconfig_put (config, "server/port", port);
+
+    mql_server_t *server = mql_server_new (config);
 
     while (true) {
         char *message = zstr_recv (server);
