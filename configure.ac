@@ -327,6 +327,90 @@ dnl END of PKG_CHECK_MODULES and/or direct tests for libczmq
 dnl END of enabled attempts to search for libczmq
 
 
+was_jansson_check_lib_detected=no
+
+search_jansson="yes"
+
+AC_ARG_WITH([jansson],
+    [
+        AS_HELP_STRING([--with-jansson],
+        [yes or no. Optionally specify jansson prefix (directory where its include/ and lib/ are located), but that is only used if pkgconfig metadata is not found first])
+    ],
+    [
+        search_jansson="yes"
+    ],
+    [
+        search_jansson="yes"
+    ])
+AS_CASE([x"${with_jansson}"],
+    [xyes], [search_jansson="yes"],
+    [xno],  [search_jansson="no"])
+
+dnl We do not abort right now, because the maintainer/developer may have
+dnl something particular in mind, e.g. to build just parts of a project.
+AS_IF([test x"${search_jansson}" = xno],
+    [AC_MSG_WARN([Required dependency on jansson was explicitly disabled during configuration by '--with-jansson=no'; subsequent full build of mqless may fail])])
+
+AS_IF([test x"${search_jansson}" = xyes], [
+    # Archive previously detected and supplied flags
+    PRE_SEARCH_CFLAGS="${CFLAGS}"
+    PRE_SEARCH_LIBS="${LIBS}"
+
+    found_pkgconfig=""
+    PKG_CHECK_MODULES([jansson], [jansson >= 0.0.0],
+    [
+        was_jansson_check_lib_detected=pkgcfg
+        found_pkgconfig="jansson"
+    ],
+    [
+        AC_MSG_NOTICE([Package jansson not found; falling back to defined compilability tests])
+
+        jansson_synthetic_cflags=""
+        jansson_synthetic_libs="-ljansson"
+
+        if test -n "${with_jansson}" && test x"${with_jansson}" != xyes && test x"${with_jansson}" != xno; then
+            if test -r "${with_jansson}/include/jansson.h"; then
+                jansson_synthetic_cflags="-I${with_jansson}/include"
+                jansson_synthetic_libs="-L${with_jansson}/lib -ljansson"
+            else
+            AC_MSG_ERROR([Header file ${with_jansson}/include/jansson.h was not found. Please check jansson prefix])
+            fi
+        else
+            AC_CHECK_HEADER([jansson.h], [],
+            AC_MSG_ERROR([Header file jansson.h was not found in default search paths])
+                )
+        fi
+
+        AC_CHECK_LIB([jansson], [json_object],
+            [
+                was_jansson_check_lib_detected=yes
+                PKGCFG_LIBS_PRIVATE="$PKGCFG_LIBS_PRIVATE -ljansson"
+            ],
+            [AC_MSG_ERROR([cannot link with -ljansson, install jansson])])
+    ])
+
+dnl END of PKG_CHECK_MODULES and/or direct tests for jansson
+    AS_CASE(["x${was_jansson_check_lib_detected}"],
+        [xpkgcfg], [
+                PKGCFG_NAMES_PRIVATE="$PKGCFG_NAMES_PRIVATE ${found_pkgconfig}"
+                CFLAGS="${jansson_CFLAGS} ${CFLAGS}"
+                LIBS="${jansson_LIBS} ${LIBS}"
+            ],
+        [xyes], [
+                CFLAGS="${jansson_synthetic_cflags} ${CFLAGS}"
+                LDFLAGS="${jansson_synthetic_libs} ${LDFLAGS}"
+                LIBS="${jansson_synthetic_libs} ${LIBS}"
+
+                AC_SUBST([jansson_CFLAGS],[${jansson_synthetic_cflags}])
+                AC_SUBST([jansson_LIBS],[${jansson_synthetic_libs}])
+            ],
+        [xno], [
+            AC_MSG_ERROR([Cannot find pkg-config metadata for jansson 0.0.0 or higher])
+    ])
+])
+dnl END of enabled attempts to search for jansson
+
+
 CFLAGS="${PREVIOUS_CFLAGS}"
 LIBS="${PREVIOUS_LIBS}"
 

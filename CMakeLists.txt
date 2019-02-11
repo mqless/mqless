@@ -127,6 +127,23 @@ ELSE (CZMQ_FOUND)
 ENDIF (CZMQ_FOUND)
 
 ########################################################################
+# JANSSON dependency
+########################################################################
+find_package(jansson REQUIRED)
+IF (JANSSON_FOUND)
+    include_directories(${JANSSON_INCLUDE_DIRS})
+    list(APPEND MORE_LIBRARIES ${JANSSON_LIBRARIES})
+  IF (PC_JANSSON_FOUND)
+      set(pkg_config_names_private "${pkg_config_names_private} jansson")
+      list(APPEND OPTIONAL_LIBRARIES_STATIC ${PC_JANSSON_STATIC_LDFLAGS})
+  ELSE (PC_JANSSON_FOUND)
+      set(pkg_config_libs_private "${pkg_config_libs_private} -ljansson")
+  ENDIF (PC_JANSSON_FOUND)
+ELSE (JANSSON_FOUND)
+    message( FATAL_ERROR "jansson not found." )
+ENDIF (JANSSON_FOUND)
+
+########################################################################
 # version
 ########################################################################
 set(MQL_VERSION_MAJOR 0)
@@ -338,6 +355,7 @@ target_link_libraries(
     mql
     ${LIBZMQ_LIBRARIES}
     ${CZMQ_LIBRARIES}
+    ${JANSSON_LIBRARIES}
     ${OPTIONAL_LIBRARIES}
 )
 endif()
@@ -347,6 +365,7 @@ target_link_libraries(
     mql-static
     ${LIBZMQ_LIBRARIES}
     ${CZMQ_LIBRARIES}
+    ${JANSSON_LIBRARIES}
     ${OPTIONAL_LIBRARIES}
     ${OPTIONAL_LIBRARIES_STATIC}
 )
@@ -364,6 +383,7 @@ target_link_libraries(
     mql
     ${LIBZMQ_LIBRARIES}
     ${CZMQ_LIBRARIES}
+    ${JANSSON_LIBRARIES}
     ${OPTIONAL_LIBRARIES}
 )
 endif()
@@ -373,6 +393,7 @@ target_link_libraries(
     mql-static
     ${LIBZMQ_LIBRARIES}
     ${CZMQ_LIBRARIES}
+    ${JANSSON_LIBRARIES}
     ${OPTIONAL_LIBRARIES}
     ${OPTIONAL_LIBRARIES_STATIC}
 )
@@ -390,6 +411,7 @@ target_link_libraries(
     mql
     ${LIBZMQ_LIBRARIES}
     ${CZMQ_LIBRARIES}
+    ${JANSSON_LIBRARIES}
     ${OPTIONAL_LIBRARIES}
 )
 endif()
@@ -399,6 +421,7 @@ target_link_libraries(
     mql-static
     ${LIBZMQ_LIBRARIES}
     ${CZMQ_LIBRARIES}
+    ${JANSSON_LIBRARIES}
     ${OPTIONAL_LIBRARIES}
     ${OPTIONAL_LIBRARIES_STATIC}
 )

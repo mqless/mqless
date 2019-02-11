@@ -13,6 +13,7 @@ int main (int argc, char **argv) {
     const char *aws_access_key = NULL;
     const char *aws_secret = NULL;
     const char *aws_region = NULL;
+    const char *aws_role = NULL;
     const char* port = NULL;
 
     for (const char* value = zargs_param_first (args); value != NULL; value = zargs_param_next (args)) {
@@ -26,6 +27,8 @@ int main (int argc, char **argv) {
             aws_secret = value;
         else if (streq (name, "--aws-region"))
             aws_region = value;
+        else if (streq (name, "--aws-role"))
+            aws_role = value;
         else if (streq (name, "--port") || streq(name, "-p"))
             port = value;
         else if (streq (name, "--help") || streq (name, "-h")) {
@@ -35,6 +38,7 @@ int main (int argc, char **argv) {
             puts ("     --aws-access-key <access-key>\tSet aws access key");
             puts ("     --aws-secret <secret>\t\tSet aws secret");
             puts ("     --aws-region <region>\t\tSet aws region");
+            puts ("     --aws-role <region>\t\tSet aws role");
             puts (" -h, --help\t\t\t\tThis help text");
             puts (" Default config-file is 'mqless.cfg'");
 
@@ -59,19 +63,23 @@ int main (int argc, char **argv) {
     if (!config) {
         config = zconfig_new ("root", NULL);
         zconfig_put (config, "server/port", "34543");
-        zconfig_put (config, "aws/access_key", "AKIDEXAMPLE");
-        zconfig_put (config, "aws/secret", "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY");
         zconfig_put (config, "aws/region", "us-east-1");
+        zconfig_put (config, "aws/role", "mqless-role");
 
         zconfig_save (config, config_file);
 
         return 0;
     }
 
-    if (aws_access_key && aws_region && aws_secret) {
+    if (aws_region)
+        zconfig_put (config, "aws/region", aws_secret);
+
+    if (aws_role)
+        zconfig_put (config, "aws/role", aws_role);
+
+    if (aws_access_key && aws_secret) {
         zconfig_put (config, "aws/access_key", aws_access_key);
         zconfig_put (config, "aws/secret", aws_secret);
-        zconfig_put (config, "aws/region", aws_secret);
     }
 
     if (port)

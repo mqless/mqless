@@ -1,4 +1,5 @@
 #include "mql_classes.h"
+#include <jansson.h>
 
 #define LAMBDA_SERVICE_NAME "lambda"
 #define DATETIME_LEN 17
@@ -12,6 +13,7 @@ struct _aws_t {
     char access_key[256];
     char secret[256];
     char region[256];
+    char role[256];
 
     zhttp_request_t *request;
     zhttp_response_t *response;
@@ -26,7 +28,7 @@ static void get_datetime (char *str) {
                     datetime->tm_hour, datetime->tm_min, datetime->tm_sec);
 }
 
-aws_t *aws_new () {
+aws_t *aws_new (const char* region, const char* role) {
     aws_t *self = (aws_t *) zmalloc (sizeof (aws_t));
     assert (self);
 
@@ -34,21 +36,23 @@ aws_t *aws_new () {
     self->secure = true;
     self->request = zhttp_request_new ();
     self->response = zhttp_response_new ();
+    strcpy (self->region, region);
+
+    if (role)
+        strcpy (self->role, role);
 
     return self;
 }
 
 void aws_set (aws_t *self, const char *access_key,
-              const char *secret,
-              const char *region) {
+              const char *secret) {
     assert (self);
 
     aws_sign_destroy (&self->sign);
-    self->sign = aws_sign_new (access_key, secret, region, LAMBDA_SERVICE_NAME);
-    sprintf (self->host, "%s.%s.amazonaws.com", LAMBDA_SERVICE_NAME, region);
+    self->sign = aws_sign_new (access_key, secret, self->region, LAMBDA_SERVICE_NAME);
+    sprintf (self->host, "%s.%s.amazonaws.com", LAMBDA_SERVICE_NAME, self->region);
     strcpy (self->access_key, access_key);
     strcpy (self->secret, secret);
-    strcpy (self->region, region);
 }
 
 void aws_destroy (aws_t **self_p) {
@@ -67,6 +71,84 @@ void aws_destroy (aws_t **self_p) {
 
         *self_p = NULL;
     }
+}
+
+static void aws_security_credentials_callback (aws_t *self, zhttp_response_t *response) {
+    if (zhttp_response_status_code (response) != 200) {
+        zsys_error ("AWS: fail to retrieve credentials %d %s",
+                zhttp_response_status_code (response),
+                zhttp_response_content (response));
+
+        return;
+    }
+
+    json_error_t error;
+    json_t *root = json_loads (zhttp_response_content (response), 0, &error);
+
+    if (root == NULL) {
+        zsys_error ("AWS: fail to parse json %s", error.text);
+        return;
+    }
+
+    if (!json_is_object (root)) {
+        zsys_error ("AWS: json object expected");
+        json_decref (root);
+        return;
+    }
+
+    json_t *code = json_object_get (root, "Code");
+    if (!json_is_string (code)) {
+        zsys_error ("AWS: code expected to be string");
+        json_decref (root);
+        return;
+    }
+
+    if (strneq ("SUCCESS", json_string_value (code))) {
+        zsys_error ("AWS: failed to retrieve security credentials %s", json_string_value (code));
+        json_decref (root);
+        return;
+    }
+
+    json_t *access_key = json_object_get (root, "AccessKeyId");
+    json_t *secret = json_object_get (root, "SecretAccessKey");
+
+    if (!json_is_string (access_key) || !json_is_string (secret)) {
+        zsys_error ("AWS: access_key or secret are missing");
+        json_decref (root);
+        return;
+    }
+
+    aws_set (self, json_string_value (access_key), json_string_value (secret));
+
+    json_decref (root);
+}
+
+void aws_refresh_credentials (aws_t *self) {
+    char *url = zsys_sprintf (
+            "http://169.254.169.254/latest/meta-data/iam/security-credentials/%s", self->role);
+
+    zhttp_request_set_url (self->request, url);
+    zhttp_request_set_method (self->request, "GET");
+    zhttp_request_send (self->request, self->http_client, 10000,
+            aws_security_credentials_callback, self);
+}
+
+int aws_refresh_credentials_sync (aws_t *self) {
+    // Invoke the async version
+    aws_refresh_credentials (self);
+
+    // Now waiting for the response
+    aws_lambda_callback_fn *callback;
+    void* arg;
+    int rc = zhttp_response_recv (self->response, self->http_client, (void**) &callback, &arg);
+    if (rc == -1) {
+        zsys_error ("AWS: fail to retrieve credentials %s", zmq_strerror (errno));
+        return rc;
+    }
+
+    callback(arg, self->response);
+
+    return self->sign != NULL ? 0 : -1;
 }
 
 int aws_invoke_lambda (

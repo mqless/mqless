@@ -5,22 +5,25 @@
 
 typedef struct _aws_t aws_t;
 
-typedef void (aws_lambda_callback_fn) (zhttp_response_t *response, void* arg);
+typedef void (aws_lambda_callback_fn) (void* arg, zhttp_response_t *response);
 
 // TODO: we should also accept a ctor without a secret and access_key and retrieve from metadata
 
-aws_t * aws_new ();
+aws_t * aws_new (const char *region, const char *role);
 void aws_destroy (aws_t ** aws_p);
 
 void aws_set (aws_t *self, const char *access_key,
-             const char *secret,
-             const char *region);
+             const char *secret);
 
 int aws_invoke_lambda (aws_t *self, const char* function_name, char **content, aws_lambda_callback_fn callback, void* arg);
 
 int aws_execute (aws_t *aws);
 
 zsock_t* aws_get_socket (aws_t *aws);
+
+void aws_refresh_credentials (aws_t *self);
+
+int aws_refresh_credentials_sync (aws_t *self);
 
 void aws_test ();
 

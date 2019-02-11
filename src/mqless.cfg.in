@@ -4,6 +4,5 @@ server
     port = 34543            #   The port mqless http server will listen on
 
 aws
-    access_key = "AKIDEXAMPLE"
-    secret = "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY"
+    role = "mqless-role"
     region = "us-east-1"

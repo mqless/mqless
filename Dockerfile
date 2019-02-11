@@ -28,6 +28,15 @@ RUN make
 RUN sudo make install
 RUN sudo ldconfig
 
+WORKDIR /home/zmq/tmp-deps
+RUN git clone --quiet https://github.com/akheron/jansson.git jansson
+WORKDIR /home/zmq/tmp-deps/jansson
+RUN ./autogen.sh 2> /dev/null
+RUN ./configure --quiet --without-docs
+RUN make
+RUN sudo make install
+RUN sudo ldconfig
+
 WORKDIR /home/zmq
 RUN git clone --quiet git://github.com/zeromq/mqless.git mqless
 WORKDIR /home/zmq/mqless
