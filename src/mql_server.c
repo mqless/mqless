@@ -110,13 +110,13 @@ server_recv_api (server_t* self) {
 }
 
 static void
-server_send_response (server_t *self, zhttp_server_connection_t **connection, zhttp_response_t *response) {
+server_send_response (server_t *self, void **connection, zhttp_response_t *response) {
     zhttp_response_send (response, self->http_worker, connection);
 }
 
 static void
 server_recv_http (server_t* self) {
-    zhttp_server_connection_t *connection = zhttp_request_recv (self->request, self->http_worker);
+    void *connection = zhttp_request_recv (self->request, self->http_worker);
 
     const char* method = zhttp_request_method (self->request);
     const char *url = zhttp_request_url (self->request);
