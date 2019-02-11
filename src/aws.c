@@ -103,7 +103,7 @@ static void aws_security_credentials_callback (aws_t *self, zhttp_response_t *re
         return;
     }
 
-    if (strneq ("SUCCESS", json_string_value (code))) {
+    if (strneq ("Success", json_string_value (code))) {
         zsys_error ("AWS: failed to retrieve security credentials %s", json_string_value (code));
         json_decref (root);
         return;
