@@ -51,12 +51,6 @@ int main (int argc, char **argv) {
         }
     }
 
-    if (!(aws_access_key && aws_region && aws_secret) && !(!aws_access_key && !aws_region && !aws_secret)) {
-        fprintf (stderr, "you must provide all aws parameters\n");
-        zargs_destroy (&args);
-        return -1;
-    }
-
     //  Load config file for our own use here
     zsys_info ("loading configuration from '%s'...", config_file);
     zconfig_t *config = zconfig_load (config_file);
