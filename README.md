@@ -41,14 +41,8 @@ MQLess need to be able to invoke AWS lambdas, that the only requirement.
 > MQLess doesn't support fetching the credentials from AWS metadata yet.
 
 ```
-sudo apt install -y build-essential libcurl-dev libmicrohttpd-dev
-git clone https://github.com/zeromq/libzmq.git
-cd libzmq
-./autogen.sh
-./configure
-make
-sudo make install
-cd ..
+sudo apt update
+sudo apt install -y libtool automake autoconf pkg-config build-essential libcurl4-nss-dev libmicrohttpd-dev libzmq3-dev libjansson-dev
 git clone https://github.com/zeromq/czmq.git
 cd czmq
 ./autogen.sh
