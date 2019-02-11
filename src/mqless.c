@@ -54,16 +54,8 @@ int main (int argc, char **argv) {
     //  Load config file for our own use here
     zsys_info ("loading configuration from '%s'...", config_file);
     zconfig_t *config = zconfig_load (config_file);
-    if (!config) {
+    if (!config)
         config = zconfig_new ("root", NULL);
-        zconfig_put (config, "server/port", "34543");
-        zconfig_put (config, "aws/region", "us-east-1");
-        zconfig_put (config, "aws/role", "mqless-role");
-
-        zconfig_save (config, config_file);
-
-        return 0;
-    }
 
     if (aws_region)
         zconfig_put (config, "aws/region", aws_secret);
