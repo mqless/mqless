@@ -28,9 +28,12 @@ typedef struct  {
     zhashx_t *mailboxes;
     aws_t    *aws;
     zpoller_t *poller;
+    ztimerset_t *timerset;
 
     bool terminated;
 } server_t;
+
+static void s_refresh_credentials_interval (int timer_id, server_t *self);
 
 static server_t *
 server_new (zconfig_t* config, zsock_t *pipe) {
@@ -51,7 +54,7 @@ server_new (zconfig_t* config, zsock_t *pipe) {
     self->response = zhttp_response_new ();
     self->mailboxes = zhashx_new ();
     zhashx_set_destructor (self->mailboxes, (czmq_destructor *) mailbox_destroy);
-
+    self->timerset = ztimerset_new ();
 
     self->aws = aws_new ();
 
@@ -66,6 +69,10 @@ server_new (zconfig_t* config, zsock_t *pipe) {
         // Request credentials from aws metadata
         int rc = aws_refresh_credentials_sync (self->aws);
         assert (rc == 0);
+
+        // We will refresh the credentials every four minutes
+        // TODO: instead of a fix interval we should refresh 4 minutes before expiry
+        ztimerset_add (self->timerset, 1000 * 60 * 4, (ztimerset_fn *) s_refresh_credentials_interval, self);
     }
 
     self->poller = zpoller_new (pipe, self->http_worker, aws_get_socket (self->aws), NULL);
@@ -87,10 +94,17 @@ server_destroy (server_t **self_p) {
         zhttp_server_destroy (&self->http_server);
         zhttp_server_options_destroy (&self->http_options);
 
+        ztimerset_destroy (&self->timerset);
         zhashx_destroy (&self->mailboxes);
         aws_destroy (&self->aws);
         zpoller_destroy (&self->poller);
     }
+}
+
+void s_refresh_credentials_interval (int timer_id, server_t *self) {
+    zsys_info ("Server: refreshing credentials");
+
+    aws_refresh_credentials (self->aws);
 }
 
 static void
@@ -156,7 +170,8 @@ server_actor (zsock_t *pipe, void *arg) {
     zsys_info ("Server: listening on port %d", zhttp_server_port (self->http_server));
 
     while (!self->terminated) {
-        void* which = zpoller_wait (self->poller, -1);
+        void* which = zpoller_wait (self->poller, ztimerset_timeout (self->timerset));
+        ztimerset_execute (self->timerset);
 
         if (which == pipe)
             server_recv_api (self);
