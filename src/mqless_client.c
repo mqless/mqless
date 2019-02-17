@@ -14,7 +14,7 @@ int main (int argc, char **argv) {
     const char *message = zargs_next (args);
 
     const char *server_address = "http://127.0.0.1:34543";
-    if (zargs_has (args,"s"))
+    if (zargs_has (args,"-s"))
         server_address = zargs_get (args, "-s");
 
     zhttp_client_t* client = zhttp_client_new (false);
