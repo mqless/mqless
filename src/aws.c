@@ -22,6 +22,7 @@ struct _aws_t {
     char secret[256];
     char region[256];
     char role[256];
+    char *session_token;
 
     zhttp_request_t *request;
     zhttp_response_t *response;
@@ -73,6 +74,7 @@ void aws_destroy (aws_t **self_p) {
         zhttp_request_destroy (&self->request);
         zhttp_response_destroy (&self->response);
         aws_sign_destroy (&self->sign);
+        zstr_free (&self->session_token);
 
         memset (self->secret, 0, strlen (self->secret));
 
@@ -197,14 +199,17 @@ static void aws_security_credentials_callback (aws_t *self, zhttp_response_t *re
 
     json_t *access_key = json_object_get (root, "AccessKeyId");
     json_t *secret = json_object_get (root, "SecretAccessKey");
+    json_t *token = json_object_get (root, "Token");
 
-    if (!json_is_string (access_key) || !json_is_string (secret)) {
+    if (!json_is_string (access_key) || !json_is_string (secret) || !json_is_string (token)) {
         zsys_error ("AWS: access_key or secret are missing");
         json_decref (root);
         self->credentials_state = ERROR;
         return;
     }
 
+    zstr_free (&self->session_token);
+    self->session_token = strdup (json_string_value (token));
     aws_set (self, self->region, json_string_value (access_key), json_string_value (secret));
 
     json_decref (root);
@@ -280,6 +285,9 @@ int aws_invoke_lambda (
     zhash_insert (headers, "Content-Type", "application/json");
     zhash_insert (headers, "Authorization", authorization_header);
     zhash_insert (headers, "X-Amz-Date", datetime);
+
+    if (self->session_token)
+        zhash_insert (headers, "X-Amz-Security-Token", self->session_token);
 
     char url[2000];
     sprintf(url, "%s://%s%s", self->secure ? "https" : "http", self->host, path);
