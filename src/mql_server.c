@@ -52,20 +52,16 @@ server_new (zconfig_t* config, zsock_t *pipe) {
     self->mailboxes = zhashx_new ();
     zhashx_set_destructor (self->mailboxes, (czmq_destructor *) mailbox_destroy);
 
-    char* region = zconfig_get (config, "aws/region", NULL);
-    if (region == NULL) {
-        zsys_error ("Server: region must be provided");
-        assert (false);
-    }
 
-    char* role_name = zconfig_get (config, "aws/role", "mqless-role");
-    self->aws = aws_new (region, role_name);
+    self->aws = aws_new ();
 
     char* access_key = zconfig_get (config, "aws/access_key", NULL);
     char* secret = zconfig_get (config, "aws/secret", NULL);
+    char* region = zconfig_get (config, "aws/region", NULL);
 
-    if (access_key && secret)
-        aws_set (self->aws, access_key, secret);
+
+    if (region && access_key && secret)
+        aws_set (self->aws, region, access_key, secret);
     else {
         // Request credentials from aws metadata
         int rc = aws_refresh_credentials_sync (self->aws);
