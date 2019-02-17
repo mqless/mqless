@@ -57,12 +57,11 @@ void aws_set (aws_t *self, const char* region, const char *access_key,
     assert (self);
 
     aws_sign_destroy (&self->sign);
-    self->sign = aws_sign_new (access_key, secret, self->region, LAMBDA_SERVICE_NAME);
-    sprintf (self->host, "%s.%s.amazonaws.com", LAMBDA_SERVICE_NAME, self->region);
+    self->sign = aws_sign_new (access_key, secret, region, LAMBDA_SERVICE_NAME);
+    sprintf (self->host, "%s.%s.amazonaws.com", LAMBDA_SERVICE_NAME, region);
     strcpy (self->access_key, access_key);
     strcpy (self->secret, secret);
     strcpy (self->region, region);
-
 }
 
 void aws_destroy (aws_t **self_p) {
