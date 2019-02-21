@@ -16,13 +16,13 @@ struct _aws_t {
     zhttp_client_t *http_client;
     aws_sign_t *sign;
 
-    bool secure;
-    char host[256];
+    char endpoint[256];
     char access_key[256];
     char secret[256];
     char region[256];
     char role[256];
     char *session_token;
+    char *host;
 
     zhttp_request_t *request;
     zhttp_response_t *response;
@@ -43,7 +43,6 @@ aws_t *aws_new () {
     assert (self);
 
     self->http_client = zhttp_client_new (false);
-    self->secure = true;
     self->request = zhttp_request_new ();
     self->response = zhttp_response_new ();
     self->credentials_state = DONE;
@@ -54,15 +53,27 @@ aws_t *aws_new () {
 }
 
 void aws_set (aws_t *self, const char* region, const char *access_key,
-              const char *secret) {
+              const char *secret, const char *endpoint) {
     assert (self);
 
     aws_sign_destroy (&self->sign);
     self->sign = aws_sign_new (access_key, secret, region, LAMBDA_SERVICE_NAME);
-    sprintf (self->host, "%s.%s.amazonaws.com", LAMBDA_SERVICE_NAME, region);
     strcpy (self->access_key, access_key);
     strcpy (self->secret, secret);
     strcpy (self->region, region);
+
+    if (endpoint)
+        strcpy (self->endpoint, endpoint);
+    else
+        sprintf (self->endpoint, "https://%s.%s.amazonaws.com", LAMBDA_SERVICE_NAME, region);
+
+    if (strncmp ("https://", self->endpoint, strlen ("https://")) == 0)
+        self->host = self->endpoint + strlen ("https://");
+    else
+    if (strncmp ("http://", self->endpoint, strlen ("http://")) == 0)
+        self->host = self->endpoint + strlen ("http://");
+    else
+        assert (false);
 }
 
 void aws_destroy (aws_t **self_p) {
@@ -210,7 +221,7 @@ static void aws_security_credentials_callback (aws_t *self, zhttp_response_t *re
 
     zstr_free (&self->session_token);
     self->session_token = strdup (json_string_value (token));
-    aws_set (self, self->region, json_string_value (access_key), json_string_value (secret));
+    aws_set (self, self->region, json_string_value (access_key), json_string_value (secret), NULL);
 
     json_decref (root);
 
@@ -290,7 +301,7 @@ int aws_invoke_lambda (
         zhash_insert (headers, "X-Amz-Security-Token", self->session_token);
 
     char url[2000];
-    sprintf(url, "%s://%s%s", self->secure ? "https" : "http", self->host, path);
+    sprintf(url, "%s%s", self->endpoint, path);
 
     // TODO: get timeout from configuration
     zhttp_request_set_content (self->request, content);

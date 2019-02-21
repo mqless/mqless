@@ -10,7 +10,7 @@ typedef void (aws_lambda_callback_fn) (void* arg, zhttp_response_t *response);
 aws_t * aws_new ();
 void aws_destroy (aws_t ** aws_p);
 
-void aws_set (aws_t *self, const char* region, const char *access_key, const char *secret);
+void aws_set (aws_t *self, const char* region, const char *access_key, const char *secret, const char *endpoint);
 
 int aws_invoke_lambda (aws_t *self, const char* function_name, char **content, aws_lambda_callback_fn callback, void* arg);
 

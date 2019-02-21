@@ -61,10 +61,11 @@ server_new (zconfig_t* config, zsock_t *pipe) {
     char* access_key = zconfig_get (config, "aws/access_key", NULL);
     char* secret = zconfig_get (config, "aws/secret", NULL);
     char* region = zconfig_get (config, "aws/region", NULL);
+    char* endpoint = zconfig_get (config, "aws/endpoint", NULL);
 
 
     if (region && access_key && secret)
-        aws_set (self->aws, region, access_key, secret);
+        aws_set (self->aws, region, access_key, secret, endpoint);
     else {
         // Request credentials from aws metadata
         int rc = aws_refresh_credentials_sync (self->aws);

@@ -1,14 +1,8 @@
-FROM ubuntu:trusty
+FROM ubuntu:bionic
 MAINTAINER mqless Developers <somdorom@gmail.com>
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get update -y -q
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -y -q --force-yes build-essential git-core libtool autotools-dev autoconf automake pkg-config unzip libkrb5-dev cmake
-
-RUN useradd -d /home/zmq -m -s /bin/bash zmq
-RUN echo "zmq ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/zmq
-RUN chmod 0440 /etc/sudoers.d/zmq
-
-USER zmq
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y -q --force-yes sudo build-essential git-core libtool autotools-dev autoconf automake pkg-config unzip libkrb5-dev cmake libnsspem libcurl4-nss-dev libmicrohttpd-dev libjansson-dev
 
 WORKDIR /home/zmq/tmp-deps
 RUN git clone --quiet https://github.com/zeromq/libzmq.git libzmq
@@ -28,9 +22,10 @@ RUN make
 RUN sudo make install
 RUN sudo ldconfig
 
-WORKDIR /home/zmq/tmp-deps
-RUN git clone --quiet https://github.com/akheron/jansson.git jansson
-WORKDIR /home/zmq/tmp-deps/jansson
+WORKDIR /home/zmq
+COPY . mqless
+# RUN git clone --quiet git://github.com/somdoron/mqless.git mqless
+WORKDIR /home/zmq/mqless
 RUN ./autogen.sh 2> /dev/null
 RUN ./configure --quiet --without-docs
 RUN make
@@ -38,10 +33,7 @@ RUN sudo make install
 RUN sudo ldconfig
 
 WORKDIR /home/zmq
-RUN git clone --quiet git://github.com/zeromq/mqless.git mqless
-WORKDIR /home/zmq/mqless
-RUN ./autogen.sh 2> /dev/null
-RUN ./configure --quiet --without-docs
-RUN make
-RUN sudo make install
-RUN sudo ldconfig
+
+EXPOSE 34543
+
+ENTRYPOINT ["mqless"]
