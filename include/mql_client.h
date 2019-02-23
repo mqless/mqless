@@ -59,7 +59,7 @@ MQL_EXPORT int
 //  Send a message to the actor
 //  Returns >= 0 if successful, -1 if interrupted.
 MQL_EXPORT int
-    mql_client_send (mql_client_t *self, uint8_t invocation_type, const char *function, const char *routing_key, const char *subject, const char *tracker, const char *payload);
+    mql_client_send (mql_client_t *self, uint8_t invocation_type, const char *function, const char *address, const char *subject, const char *tracker, const char *payload);
 
 //  Receive message from server; Returns >= 0 if successful, -1 if interrupted.
 MQL_EXPORT int

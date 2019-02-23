@@ -132,10 +132,10 @@ server_recv_http (server_t* self) {
     const char* method = zhttp_request_method (self->request);
     const char *url = zhttp_request_url (self->request);
 
-    char* routing_key;
-    char* function_name;
+    char* address;
+    char* function;
 
-    if (!zhttp_request_match (self->request, "POST", "/send/%s/%s", &function_name, &routing_key)) {
+    if (!zhttp_request_match (self->request, "POST", "/send/%s/%s", &function, &address)) {
         zsys_warning ("Server: not found %s %s", method, url);
         zhttp_response_set_status_code (self->response, 404);
         zhttp_response_set_content_const (self->response, "Not found");
@@ -147,17 +147,17 @@ server_recv_http (server_t* self) {
     char *payload = zhttp_request_get_content (self->request);
     zsys_info ("Server: new request %s %s", method, url);
 
-    mailbox_t *mailbox = (mailbox_t *) zhashx_lookup (self->mailboxes, routing_key);
+    mailbox_t *mailbox = (mailbox_t *) zhashx_lookup (self->mailboxes, address);
     if (!mailbox) {
-        mailbox = mailbox_new (routing_key, self->aws, self, (mailbox_callback_fn *)server_send_response);
+        mailbox = mailbox_new (address, self->aws, self, (mailbox_callback_fn *)server_send_response);
         assert (mailbox);
-        zhashx_insert (self->mailboxes, routing_key, mailbox);
+        zhashx_insert (self->mailboxes, address, mailbox);
     }
 
     //  Queuing the message on the worker, the worker is responsible to reply to the client through the return address
     mailbox_send (
             mailbox,
-            function_name,
+            function,
             MQL_INVOCATION_TYPE_REQUEST_RESPONSE, // TODO: figure out the invocacation type,
             &payload,
             connection);

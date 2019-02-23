@@ -7,7 +7,7 @@ typedef void (mailbox_callback_fn) (void *server, void **connection, zhttp_respo
 
 typedef struct _mailbox_t mailbox_t;
 
-mailbox_t* mailbox_new (const char* routing_key, aws_t *aws, void *server, mailbox_callback_fn *callback);
+mailbox_t* mailbox_new (const char* address, aws_t *aws, void *server, mailbox_callback_fn *callback);
 
 void mailbox_destroy (mailbox_t  **self_p);
 

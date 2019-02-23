@@ -4,13 +4,13 @@ int main (int argc, char **argv) {
     zargs_t *args = zargs_new (argc, argv);
 
     if (zargs_hasx (args, "--help", "-h", NULL) || zargs_arguments (args) != 3) {
-        puts ("Usage: mqless-client [--s mqless-address] routing_key function message");
+        puts ("Usage: mqless-client [--s mqless-address] function address message");
         puts (" Message must be valid json.");
         return 0;
     }
 
-    const char *routing_key = zargs_first (args);
     const char *function = zargs_next (args);
+    const char *address = zargs_first (args);
     const char *message = zargs_next (args);
 
     const char *server_address = "http://127.0.0.1:34543";
@@ -20,7 +20,7 @@ int main (int argc, char **argv) {
     zhttp_client_t* client = zhttp_client_new (false);
     zhttp_request_t *request = zhttp_request_new ();
 
-    char* url = zsys_sprintf ("%s/send/%s/%s", server_address, function, routing_key);
+    char* url = zsys_sprintf ("%s/send/%s/%s", server_address, function, address);
     printf ("%s\n", url);
 
     zhttp_request_set_url (request, url);

@@ -2,7 +2,7 @@
 #include <string.h>
 
 struct _mailbox_t {
-    char *routing_key;
+    char *address;
     zlistx_t *queue;
     void *server;
     mailbox_callback_fn *callback;
@@ -44,18 +44,18 @@ static void mailbox_item_destroy (mailbox_item_t **self_p) {
 
 static char *
 mailbox_item_create_content (mailbox_item_t *self) {
-    static const char* routing_key_key = "{\"routing_key\":\""; // TODO: check lambda convention
+    static const char* address_key = "{\"address\":\""; //
     static const char* payload_key = "\",\"payload\":";
     static const char* close_bracket = "}";
-    size_t routing_key_key_size = strlen(routing_key_key);
+    size_t address_key_size = strlen(address_key);
     size_t payload_key_size = strlen(payload_key);
     size_t close_bracket_size = strlen(close_bracket);
 
     size_t payload_size = strlen(self->payload);
 
     size_t content_size =
-            routing_key_key_size +
-            strlen(self->parent->routing_key) +
+            address_key_size +
+            strlen(self->parent->address) +
             payload_key_size +
             payload_size +
             close_bracket_size;
@@ -63,11 +63,11 @@ mailbox_item_create_content (mailbox_item_t *self) {
     char* content = (char*) malloc (content_size + 1);
     char* needle = content;
 
-    memcpy (needle, routing_key_key, routing_key_key_size);
-    needle += routing_key_key_size;
+    memcpy (needle, address_key, address_key_size);
+    needle += address_key_size;
 
-    memcpy (needle, self->parent->routing_key, strlen (self->parent->routing_key));
-    needle += strlen (self->parent->routing_key);
+    memcpy (needle, self->parent->address, strlen (self->parent->address));
+    needle += strlen (self->parent->address);
 
     memcpy (needle, payload_key, payload_key_size);
     needle += payload_key_size;
@@ -86,10 +86,10 @@ mailbox_item_create_content (mailbox_item_t *self) {
 }
 
 mailbox_t *
-mailbox_new (const char *routing_key, aws_t *aws, void *server, mailbox_callback_fn *callback) {
+mailbox_new (const char *address, aws_t *aws, void *server, mailbox_callback_fn *callback) {
     mailbox_t *self = (mailbox_t *) zmalloc (sizeof (mailbox_t));
     assert (self);
-    self->routing_key = strdup (routing_key);
+    self->address = strdup (address);
 
     self->queue = zlistx_new ();
     zlistx_set_destructor (self->queue, (zlistx_destructor_fn *) mailbox_item_destroy);
@@ -104,7 +104,7 @@ mailbox_new (const char *routing_key, aws_t *aws, void *server, mailbox_callback
 
 void mailbox_destroy (mailbox_t **self_p) {
     mailbox_t *self = *self_p;
-    zstr_free (&self->routing_key);
+    zstr_free (&self->address);
     zlistx_destroy (&self->queue);
 
     free (self);
@@ -117,7 +117,7 @@ static void mailbox_next (mailbox_t *self) {
     mailbox_item_t *next = (mailbox_item_t *) zlistx_detach_cur (self->queue);
 
     if (next) {
-        zsys_info ("mailbox: invoking function. routing key = %s, function: %s", self->routing_key, next->function);
+        zsys_info ("mailbox: invoking function. address = %s, function: %s", self->address, next->function);
         self->inprogress = true;
         char* content = mailbox_item_create_content (next);
 
@@ -129,8 +129,8 @@ static void mailbox_next (mailbox_t *self) {
 }
 
 static void mailbox_item_callback (mailbox_item_t *self, zhttp_response_t *response) {
-    zsys_info ("mailbox: function completed. routing key: %s, status code: %d, function: %s",
-               self->parent->routing_key, zhttp_response_status_code (response),
+    zsys_info ("mailbox: function completed. address: %s, status code: %d, function: %s",
+               self->parent->address, zhttp_response_status_code (response),
                self->function);
 
     if (self->invocation_type == MQL_INVOCATION_TYPE_REQUEST_RESPONSE) {
@@ -164,7 +164,7 @@ int mailbox_send (
     mailbox_item_t *item = lambda_request_new (self, function, invocation_type, *payload, connection);
     zlistx_add_end (self->queue, item);
 
-    zsys_info ("mailbox: new function request. routing key: %s, function: %s", self->routing_key, function);
+    zsys_info ("mailbox: new function request. address: %s, function: %s", self->address, function);
 
     if (!self->inprogress)
         mailbox_next (self);
