@@ -20,7 +20,7 @@ int main (int argc, char **argv) {
     zhttp_client_t* client = zhttp_client_new (false);
     zhttp_request_t *request = zhttp_request_new ();
 
-    char* url = zsys_sprintf ("%s/send/%s/%s", server_address, routing_key, function);
+    char* url = zsys_sprintf ("%s/send/%s/%s", server_address, function, routing_key);
     printf ("%s\n", url);
 
     zhttp_request_set_url (request, url);

@@ -135,7 +135,7 @@ server_recv_http (server_t* self) {
     char* routing_key;
     char* function_name;
 
-    if (!zhttp_request_match (self->request, "POST", "/send/%s/%s", &routing_key, &function_name)) {
+    if (!zhttp_request_match (self->request, "POST", "/send/%s/%s", &function_name, &routing_key)) {
         zsys_warning ("Server: not found %s %s", method, url);
         zhttp_response_set_status_code (self->response, 404);
         zhttp_response_set_content_const (self->response, "Not found");
