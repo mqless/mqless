@@ -18,8 +18,9 @@ MQLess is a router in front of AWS Lambda.
 When you send a message to an actor, MQLess queue the message to each actor mailbox and activate the actor on AWS Lambda.
 When actor is done processing the message, MQLess send the response back to the caller and process the next message on the mailbox.
 
-### Building MQLess
+## Building MQLess
 
+### Ubuntu
 
 ```
 sudo apt update
@@ -40,4 +41,13 @@ make
 
 To install it globally run `sudo make install`.
 To run MQLess run `mqless`, to see all options run `mqless --help`.
+
+### Windows
+
+Coming soon or contribute
+
+### OSX
+
+Coming soon or contribute
+
 
