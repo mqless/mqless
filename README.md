@@ -10,7 +10,7 @@ MQLess bring a new approach by running the actors on AWS Lambda instead of a clu
 ## Why
 
 The current model of serverless is stateless one. However, real world applications are not always stateless.
-Actor model fits serverless nicely, you benefit the serverless part but also benefit statefull part, on AWS Lambda.
+Actor model fits serverless nicely, you benefit the serverless part but also benefit stateful part, on AWS Lambda.
 
 ## How it works
 
