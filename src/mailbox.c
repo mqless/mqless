@@ -44,10 +44,12 @@ static void mailbox_item_destroy (mailbox_item_t **self_p) {
 
 static char *
 mailbox_item_create_content (mailbox_item_t *self) {
-    static const char* address_key = "{\"address\":\""; //
-    static const char* payload_key = "\",\"payload\":";
+    static const char* address_key = "{\"header\":{\"address\":\"";
+    static const char* type_key = "\",\"type\":\"";
+    static const char* payload_key = "\"},\"payload\":";
     static const char* close_bracket = "}";
     size_t address_key_size = strlen(address_key);
+    size_t type_key_size = strlen (type_key);
     size_t payload_key_size = strlen(payload_key);
     size_t close_bracket_size = strlen(close_bracket);
 
@@ -56,6 +58,8 @@ mailbox_item_create_content (mailbox_item_t *self) {
     size_t content_size =
             address_key_size +
             strlen(self->parent->address) +
+            type_key_size +
+            strlen (self->function) +
             payload_key_size +
             payload_size +
             close_bracket_size;
@@ -68,6 +72,12 @@ mailbox_item_create_content (mailbox_item_t *self) {
 
     memcpy (needle, self->parent->address, strlen (self->parent->address));
     needle += strlen (self->parent->address);
+
+    memcpy (needle, type_key, type_key_size);
+    needle += type_key_size;
+
+    memcpy (needle, self->function, strlen (self->function));
+    needle += strlen (self->function);
 
     memcpy (needle, payload_key, payload_key_size);
     needle += payload_key_size;
