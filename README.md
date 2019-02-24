@@ -50,4 +50,21 @@ Coming soon or contribute
 
 Coming soon or contribute
 
+## Docker
+
+You can run mqless from docker as well, for local installation run:
+
+```
+ docker run -d -p 34543:34543 --restart always --network host mqless/mqless --aws-local http://127.0.0.1:3001
+```
+
+For AWS run:
+
+```
+ docker run -d -p 34543:34543 --restart always --network host mqless/mqless
+```
+
+You have to create a IAM role first, head over to the [docs](http://mqless.com/docs/install-ec2/)
+
+
 
