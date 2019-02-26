@@ -1,6 +1,15 @@
 #include "mql_classes.h"
 #include <string.h>
 
+typedef struct {
+    mailbox_t *parent;
+    char *function;
+    int invocation_type;
+    char* payload;
+    void* connection;
+    bool forwarded;
+} mailbox_item_t;
+
 struct _mailbox_t {
     char *address;
     zlistx_t *queue;
@@ -8,15 +17,8 @@ struct _mailbox_t {
     mailbox_callback_fn *callback;
     aws_t *aws;
     bool inprogress;
+    mailbox_item_t *current;
 };
-
-typedef struct {
-    mailbox_t *parent;
-    char *function;
-    int invocation_type;
-    char* payload;
-    void* connection;
-} mailbox_item_t;
 
 static void mailbox_item_callback (mailbox_item_t *self, zhttp_response_t *response);
 
@@ -30,6 +32,7 @@ static mailbox_item_t *lambda_request_new (mailbox_t *parent,
     self->invocation_type = invocation_type;
     self->payload = payload;
     self->connection = connection;
+    self->forwarded = false;
 
     return self;
 }
@@ -45,18 +48,22 @@ static void mailbox_item_destroy (mailbox_item_t **self_p) {
 static char *
 mailbox_item_create_content (mailbox_item_t *self) {
     static const char* address_key = "{\"header\":{\"address\":\"";
+    static const char* id_key = "\",\"id\":\"";
     static const char* type_key = "\",\"type\":\"";
     static const char* endpoint_key = "\",\"endpoint\":\"";
     static const char* payload_key = "\"},\"payload\":";
     static const char* close_bracket = "}";
     size_t address_key_size = strlen(address_key);
+    size_t id_key_size = strlen(id_key);
     size_t type_key_size = strlen (type_key);
     size_t endpoint_key_size = strlen (endpoint_key);
     size_t payload_key_size = strlen(payload_key);
     size_t close_bracket_size = strlen(close_bracket);
 
-    const char *endpoint = mql_server_endpoint (self->parent->server);
+    int seq = abs (rand ());
+    size_t id_size = (size_t) snprintf (NULL, 0, "%s/%d", self->parent->address, seq);
 
+    const char *endpoint = mql_server_endpoint (self->parent->server);
     const char *payload = self->payload == NULL ? "{}" : self->payload;
 
     size_t payload_size = strlen(payload);
@@ -64,6 +71,8 @@ mailbox_item_create_content (mailbox_item_t *self) {
     size_t content_size =
             address_key_size +
             strlen(self->parent->address) +
+            id_key_size +
+            id_size +
             type_key_size +
             strlen (self->function) +
             endpoint_key_size +
@@ -80,6 +89,11 @@ mailbox_item_create_content (mailbox_item_t *self) {
 
     memcpy (needle, self->parent->address, strlen (self->parent->address));
     needle += strlen (self->parent->address);
+
+    memcpy (needle, id_key, id_key_size);
+    needle += id_key_size;
+
+    needle += sprintf (needle, "%s/%d", self->parent->address, seq);
 
     memcpy (needle, type_key, type_key_size);
     needle += type_key_size;
@@ -143,12 +157,14 @@ static void mailbox_next (mailbox_t *self) {
     if (next) {
         zsys_info ("mailbox: invoking function. address = %s, function: %s", self->address, next->function);
         self->inprogress = true;
+        self->current = next;
         char* content = mailbox_item_create_content (next);
 
         aws_invoke_lambda (self->aws, next->function, &content,
                 (aws_lambda_callback_fn*)mailbox_item_callback, next);
     } else {
         self->inprogress = false;
+        self->current = NULL;
     }
 }
 
@@ -157,7 +173,7 @@ static void mailbox_item_callback (mailbox_item_t *self, zhttp_response_t *respo
                self->parent->address, zhttp_response_status_code (response),
                self->function);
 
-    if (self->invocation_type == MQL_INVOCATION_TYPE_REQUEST_RESPONSE) {
+    if (self->invocation_type == MQL_INVOCATION_TYPE_REQUEST_RESPONSE && !self->forwarded) {
         byte source;
 
         uint32_t status_code = zhttp_response_status_code (response);
@@ -196,4 +212,21 @@ int mailbox_send (
     *payload = NULL;
 
     return 0;
+}
+
+int mailbox_forward (mailbox_t *self,
+                     mailbox_t *to,
+                     const char *function,
+                     char **payload) {
+
+    if (!self->inprogress) {
+        zstr_free (payload);
+        return -1;
+    }
+
+    assert (self->current);
+
+    self->current->forwarded = true;
+
+    return mailbox_send (to, function, self->current->invocation_type, payload, self->current->connection);
 }

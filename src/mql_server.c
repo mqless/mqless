@@ -146,33 +146,64 @@ server_recv_http (mql_server_t* self) {
 
     char* address;
     char* function;
+    char* from_address;
+    char* seq;
 
-    if (!zhttp_request_match (self->request, "POST", "/send/%s/%s", &function, &address)) {
+    zsys_info ("Server: new request %s %s", method, url);
+
+    if (zhttp_request_match (self->request, "POST", "/send/%s/%s", &function, &address)) {
+        char *payload = zhttp_request_get_content (self->request);
+
+        mailbox_t *mailbox = (mailbox_t *) zhashx_lookup (self->mailboxes, address);
+        if (!mailbox) {
+            mailbox = mailbox_new (address, self->aws, self, (mailbox_callback_fn *) server_send_response);
+            assert (mailbox);
+            zhashx_insert (self->mailboxes, address, mailbox);
+        }
+
+        //  Queuing the message on the worker, the worker is responsible to reply to the client through the return address
+        mailbox_send (
+                mailbox,
+                function,
+                MQL_INVOCATION_TYPE_REQUEST_RESPONSE, // TODO: figure out the invocacation type,
+                &payload,
+                connection);
+    }
+    else
+    if (zhttp_request_match (self->request, "POST", "/forward/%s/%s/%s/%s", &from_address, &seq, &function, &address)) {
+        mailbox_t *from_mailbox = (mailbox_t *) zhashx_lookup (self->mailboxes, from_address);
+        if (!from_mailbox) {
+            zsys_warning ("Server: trying to forward non-existed message");
+            return;
+        }
+
+        mailbox_t *to_mailbox = (mailbox_t *) zhashx_lookup (self->mailboxes, address);
+        if (!to_mailbox) {
+            to_mailbox = mailbox_new (address, self->aws, self, (mailbox_callback_fn *) server_send_response);
+            assert (to_mailbox);
+            zhashx_insert (self->mailboxes, address, to_mailbox);
+        }
+
+        char *payload = zhttp_request_get_content (self->request);
+
+        //  Queuing the message on the worker, the worker is responsible to reply to the client through the return address
+        int rc = mailbox_forward (from_mailbox, to_mailbox, function, &payload);
+
+        if (rc != 0) {
+            zhttp_response_set_status_code (self->response, 404);
+            zhttp_response_set_content_const (self->response, "No message with such id was found");
+        }
+        else
+            zhttp_response_set_status_code (self->response, 200);
+
+        zhttp_response_send (self->response, self->http_worker, &connection);
+    }
+    else {
         zsys_warning ("Server: not found %s %s", method, url);
         zhttp_response_set_status_code (self->response, 404);
         zhttp_response_set_content_const (self->response, "Not found");
         zhttp_response_send (self->response, self->http_worker, &connection);
-
-        return;
     }
-
-    char *payload = zhttp_request_get_content (self->request);
-    zsys_info ("Server: new request %s %s", method, url);
-
-    mailbox_t *mailbox = (mailbox_t *) zhashx_lookup (self->mailboxes, address);
-    if (!mailbox) {
-        mailbox = mailbox_new (address, self->aws, self, (mailbox_callback_fn *)server_send_response);
-        assert (mailbox);
-        zhashx_insert (self->mailboxes, address, mailbox);
-    }
-
-    //  Queuing the message on the worker, the worker is responsible to reply to the client through the return address
-    mailbox_send (
-            mailbox,
-            function,
-            MQL_INVOCATION_TYPE_REQUEST_RESPONSE, // TODO: figure out the invocacation type,
-            &payload,
-            connection);
 }
 
 void

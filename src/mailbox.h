@@ -17,5 +17,10 @@ int mailbox_send (mailbox_t *self,
                   char **payload,
                   void* connection);
 
+int mailbox_forward (mailbox_t *self,
+                     mailbox_t *to,
+                     const char *function,
+                     char **payload);
+
 #endif
 
