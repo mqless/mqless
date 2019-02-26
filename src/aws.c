@@ -21,6 +21,7 @@ struct _aws_t {
     char secret[256];
     char region[256];
     char role[256];
+    char privateIp[256];
     char *session_token;
     char *host;
 
@@ -132,6 +133,15 @@ static void aws_security_credentials_region_callback (aws_t *self, zhttp_respons
         return;
     }
 
+    json_t *privateIp = json_object_get (root, "privateIp");
+    if (!json_is_string (privateIp)) {
+        zsys_error ("AWS: privateIp expected to be string");
+        json_decref (root);
+        self->credentials_state = ERROR;
+        return;
+    }
+
+    strcpy (self->privateIp, json_string_value (privateIp));
     strcpy (self->region, json_string_value (region));
     json_decref (root);
 
@@ -326,6 +336,11 @@ int aws_execute (aws_t *self) {
     }
 
     return 0;
+}
+
+const char *aws_private_ip_address (aws_t *self) {
+    assert (self);
+    return self->privateIp;
 }
 
 zsock_t *aws_get_socket (aws_t *aws) {

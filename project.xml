@@ -18,7 +18,6 @@
     <use project = "jansson" implied = "1" />
 
     <target name = "travis" />
-    <target name = "docker" />
 
     <main name = "mqless" service = "1" />
     <main name = "mqless_client" />
@@ -30,5 +29,5 @@
     <extra name = "foreign/sha256.h" />
     <extra name = "foreign/sha256.inc_c" />
 
-    <class name = "mql_server">mqless server implementation</class>
+    <actor name = "mql_server">mqless server implementation</actor>
 </project>

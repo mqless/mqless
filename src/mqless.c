@@ -86,7 +86,7 @@ int main (int argc, char **argv) {
     if (port)
         zconfig_put (config, "server/port", port);
 
-    mql_server_t *server = mql_server_new (config);
+    zactor_t *server = mql_server_new (config);
 
     while (true) {
         char *message = zstr_recv (server);

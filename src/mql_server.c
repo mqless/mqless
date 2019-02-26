@@ -17,13 +17,14 @@
 #include "mql_classes.h"
 
 
-typedef struct  {
+struct _mql_server_t {
     zsock_t* pipe;
     zhttp_server_options_t *http_options;
     zhttp_server_t *http_server;
     zhttp_request_t *request;
     zhttp_response_t *response;
     zsock_t* http_worker;
+    char endpoint[256];
 
     zhashx_t *mailboxes;
     aws_t    *aws;
@@ -31,15 +32,15 @@ typedef struct  {
     ztimerset_t *timerset;
 
     bool terminated;
-} server_t;
+};
 
-static void s_refresh_credentials_interval (int timer_id, server_t *self);
+static void s_refresh_credentials_interval (int timer_id, mql_server_t *self);
 
-static server_t *
+static mql_server_t *
 server_new (zconfig_t* config, zsock_t *pipe) {
     assert (config);
 
-    server_t *self = (server_t*) zmalloc (sizeof (server_t));
+    mql_server_t *self = (mql_server_t*) zmalloc (sizeof (mql_server_t));
     assert (self);
 
     self->pipe = pipe;
@@ -61,11 +62,18 @@ server_new (zconfig_t* config, zsock_t *pipe) {
     char* access_key = zconfig_get (config, "aws/access_key", NULL);
     char* secret = zconfig_get (config, "aws/secret", NULL);
     char* region = zconfig_get (config, "aws/region", NULL);
-    char* endpoint = zconfig_get (config, "aws/endpoint", NULL);
+    char* aws_endpoint = zconfig_get (config, "aws/endpoint", NULL);
 
+    if (region && access_key && secret) {
+        aws_set (self->aws, region, access_key, secret, aws_endpoint);
 
-    if (region && access_key && secret)
-        aws_set (self->aws, region, access_key, secret, endpoint);
+        ziflist_t *iflist = ziflist_new ();
+        ziflist_first (iflist);
+
+        snprintf (self->endpoint, 255, "http://%s:%d", ziflist_address (iflist), port);
+
+        ziflist_destroy (&iflist);
+    }
     else {
         // Request credentials from aws metadata
         int rc = aws_refresh_credentials_sync (self->aws);
@@ -74,7 +82,11 @@ server_new (zconfig_t* config, zsock_t *pipe) {
         // We will refresh the credentials every four minutes
         // TODO: instead of a fix interval we should refresh 4 minutes before expiry
         ztimerset_add (self->timerset, 1000 * 60 * 4, (ztimerset_fn *) s_refresh_credentials_interval, self);
+
+        snprintf (self->endpoint, 255, "http://%s:%d", aws_private_ip_address (self->aws), port);
     }
+
+    zsys_info ("Server: server endpoint is %s", self->endpoint);
 
     self->poller = zpoller_new (pipe, self->http_worker, aws_get_socket (self->aws), NULL);
     zpoller_set_nonstop (self->poller, true);
@@ -84,9 +96,9 @@ server_new (zconfig_t* config, zsock_t *pipe) {
 }
 
 static void
-server_destroy (server_t **self_p) {
+server_destroy (mql_server_t **self_p) {
     assert (self_p);
-    server_t *self = *self_p;
+    mql_server_t *self = *self_p;
 
     if (self) {
         zhttp_request_destroy (&self->request);
@@ -102,14 +114,14 @@ server_destroy (server_t **self_p) {
     }
 }
 
-void s_refresh_credentials_interval (int timer_id, server_t *self) {
+void s_refresh_credentials_interval (int timer_id, mql_server_t *self) {
     zsys_info ("Server: refreshing credentials");
 
     aws_refresh_credentials (self->aws);
 }
 
 static void
-server_recv_api (server_t* self) {
+server_recv_api (mql_server_t* self) {
     char* command = zstr_recv (self->pipe);
 
     // Interrupted
@@ -121,12 +133,12 @@ server_recv_api (server_t* self) {
 }
 
 static void
-server_send_response (server_t *self, void **connection, zhttp_response_t *response) {
+server_send_response (mql_server_t *self, void **connection, zhttp_response_t *response) {
     zhttp_response_send (response, self->http_worker, connection);
 }
 
 static void
-server_recv_http (server_t* self) {
+server_recv_http (mql_server_t* self) {
     void *connection = zhttp_request_recv (self->request, self->http_worker);
 
     const char* method = zhttp_request_method (self->request);
@@ -163,9 +175,9 @@ server_recv_http (server_t* self) {
             connection);
 }
 
-static void
-server_actor (zsock_t *pipe, void *arg) {
-    server_t *self = server_new (arg, pipe);
+void
+mql_server_actor (zsock_t *pipe, void *arg) {
+    mql_server_t *self = server_new (arg, pipe);
     zsock_signal (pipe, 0);
 
     zsys_info ("Server: listening on port %d", zhttp_server_port (self->http_server));
@@ -185,13 +197,18 @@ server_actor (zsock_t *pipe, void *arg) {
     server_destroy (&self);
 }
 
+const char *
+mql_server_endpoint (mql_server_t *self) {
+    return self->endpoint;
+}
+
 //  --------------------------------------------------------------------------
 //  Create a new mql_server
 
-mql_server_t *
+zactor_t *
 mql_server_new (zconfig_t *config)
 {
-    return (mql_server_t *)zactor_new (server_actor, config);
+    return zactor_new (mql_server_actor, config);
 }
 
 
@@ -199,9 +216,9 @@ mql_server_new (zconfig_t *config)
 //  Destroy the mql_server
 
 void
-mql_server_destroy (mql_server_t **self_p)
+mql_server_destroy (zactor_t **self_p)
 {
-    zactor_destroy ((zactor_t**)self_p);
+    zactor_destroy (self_p);
 }
 
 //  --------------------------------------------------------------------------

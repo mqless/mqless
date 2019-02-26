@@ -83,11 +83,6 @@ src_mql_selftest_LDADD = ${program_libs}
 src_mql_selftest_SOURCES = src/mql_selftest.c
 endif #ENABLE_MQL_SELFTEST
 
-# Install api files into /usr/local/share/zproject
-apidir = @datadir@/zproject/mqless
-dist_api_DATA = \
-    api/mql_server.api
-
 # define custom target for all products of /src
 src: \
 		src/mqless \

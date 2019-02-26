@@ -22,6 +22,8 @@ void aws_refresh_credentials (aws_t *self);
 
 int aws_refresh_credentials_sync (aws_t *self);
 
+const char *aws_private_ip_address (aws_t *self);
+
 void aws_test ();
 
 #endif

@@ -4,7 +4,7 @@
 struct _mailbox_t {
     char *address;
     zlistx_t *queue;
-    void *server;
+    mql_server_t *server;
     mailbox_callback_fn *callback;
     aws_t *aws;
     bool inprogress;
@@ -46,20 +46,28 @@ static char *
 mailbox_item_create_content (mailbox_item_t *self) {
     static const char* address_key = "{\"header\":{\"address\":\"";
     static const char* type_key = "\",\"type\":\"";
+    static const char* endpoint_key = "\",\"endpoint\":\"";
     static const char* payload_key = "\"},\"payload\":";
     static const char* close_bracket = "}";
     size_t address_key_size = strlen(address_key);
     size_t type_key_size = strlen (type_key);
+    size_t endpoint_key_size = strlen (endpoint_key);
     size_t payload_key_size = strlen(payload_key);
     size_t close_bracket_size = strlen(close_bracket);
 
-    size_t payload_size = strlen(self->payload);
+    const char *endpoint = mql_server_endpoint (self->parent->server);
+
+    const char *payload = self->payload == NULL ? "{}" : self->payload;
+
+    size_t payload_size = strlen(payload);
 
     size_t content_size =
             address_key_size +
             strlen(self->parent->address) +
             type_key_size +
             strlen (self->function) +
+            endpoint_key_size +
+            strlen (endpoint) +
             payload_key_size +
             payload_size +
             close_bracket_size;
@@ -79,10 +87,16 @@ mailbox_item_create_content (mailbox_item_t *self) {
     memcpy (needle, self->function, strlen (self->function));
     needle += strlen (self->function);
 
+    memcpy (needle, endpoint_key, endpoint_key_size);
+    needle += endpoint_key_size;
+
+    memcpy (needle, endpoint, strlen (endpoint));
+    needle += strlen (endpoint);
+
     memcpy (needle, payload_key, payload_key_size);
     needle += payload_key_size;
 
-    memcpy (needle, self->payload, payload_size);
+    memcpy (needle, payload, payload_size);
     needle += payload_size;
 
     memcpy (needle, close_bracket, close_bracket_size);
@@ -96,7 +110,7 @@ mailbox_item_create_content (mailbox_item_t *self) {
 }
 
 mailbox_t *
-mailbox_new (const char *address, aws_t *aws, void *server, mailbox_callback_fn *callback) {
+mailbox_new (const char *address, aws_t *aws, mql_server_t *server, mailbox_callback_fn *callback) {
     mailbox_t *self = (mailbox_t *) zmalloc (sizeof (mailbox_t));
     assert (self);
     self->address = strdup (address);
