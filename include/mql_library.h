@@ -58,23 +58,14 @@
 #   endif
 #endif
 
-//  Project has no stable classes, so we build the draft API
-#undef  MQL_BUILD_DRAFT_API
-#define MQL_BUILD_DRAFT_API
-
 //  Opaque class structures to allow forward references
 //  These classes are stable or legacy and built in all releases
-//  Draft classes are by default not built in stable releases
-#ifdef MQL_BUILD_DRAFT_API
 typedef struct _mql_server_t mql_server_t;
 #define MQL_SERVER_T_DEFINED
-#endif // MQL_BUILD_DRAFT_API
 
 
 //  Public classes, each with its own header file
-#ifdef MQL_BUILD_DRAFT_API
 #include "mql_server.h"
-#endif // MQL_BUILD_DRAFT_API
 
 #ifdef MQL_BUILD_DRAFT_API
 

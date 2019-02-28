@@ -28,6 +28,7 @@
 
     <extra name = "foreign/sha256.h" />
     <extra name = "foreign/sha256.inc_c" />
+    <extra name = "foreign/hmac_sha256.h" />
 
-    <actor name = "mql_server">mqless server implementation</actor>
+    <actor name = "mql_server" state = "stable">mqless server implementation</actor>
 </project>

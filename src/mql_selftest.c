@@ -27,10 +27,8 @@ typedef struct {
 
 static test_item_t
 all_tests [] = {
-#ifdef MQL_BUILD_DRAFT_API
-// Tests for draft public classes:
-    { "mql_server", mql_server_test, false, true, NULL },
-#endif // MQL_BUILD_DRAFT_API
+// Tests for stable public classes:
+    { "mql_server", mql_server_test, true, true, NULL },
 #ifdef MQL_BUILD_DRAFT_API
 // Tests for stable/draft private classes:
 // Now built only with --enable-drafts, so even stable builds are hidden behind the flag

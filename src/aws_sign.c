@@ -1,7 +1,6 @@
 #include "mql_classes.h"
 #include "foreign/sha256.h"
 #include "foreign/hmac_sha256.h"
-#include "testutil.h"
 
 #include <string.h>
 #include <time.h>
@@ -55,6 +54,7 @@ void aws_sign_destroy (aws_sign_t **self_p) {
 
 static void get_date (char *output, const char *datetime) {
     strncpy (output, datetime, DATE_LEN - 1);
+    output[DATE_LEN - 1] = '\0';
 }
 
 static void to_hex (char *output, byte *data, size_t size) {
@@ -271,6 +271,9 @@ void aws_sign (
 }
 
 void aws_sign_test () {
+    printf (" * aws_sign: ");
+
+
     const char *datetime = "20150830T123600Z";
     char date[DATE_LEN];
     get_date (date, datetime);
@@ -287,14 +290,14 @@ void aws_sign_test () {
             "20150830T123600Z",
             NULL, 0
     );
-    assert_streq (canonical_request, "GET\n"
+    assert(streq (canonical_request, "GET\n"
                                      "/\n"
                                      "Param1=value1&Param2=value2\n"
                                      "host:example.amazonaws.com\n"
                                      "x-amz-date:20150830T123600Z\n"
                                      "\n"
                                      "host;x-amz-date\n"
-                                     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+                                     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
 
     char canonical_request_hash[SHA256_DIGEST_HEX_SIZE];
     create_canonical_request_hash (
@@ -307,18 +310,18 @@ void aws_sign_test () {
             "20150830T123600Z",
             NULL, 0
     );
-    assert_streq (canonical_request_hash, "816cd5b414d056048ba4f7c5386d6e0533120fb1fcfa93762cf0fc39e2cf19e0");
+    assert(streq (canonical_request_hash, "816cd5b414d056048ba4f7c5386d6e0533120fb1fcfa93762cf0fc39e2cf19e0"));
 
     char string_to_sign[MAX_STRING_TO_SIGN_LEN];
     create_string_to_sign (self, string_to_sign, canonical_request_hash, datetime, date);
-    assert_streq (string_to_sign, "AWS4-HMAC-SHA256\n"
+    assert(streq (string_to_sign, "AWS4-HMAC-SHA256\n"
                                   "20150830T123600Z\n"
                                   "20150830/us-east-1/service/aws4_request\n"
-                                  "816cd5b414d056048ba4f7c5386d6e0533120fb1fcfa93762cf0fc39e2cf19e0");
+                                  "816cd5b414d056048ba4f7c5386d6e0533120fb1fcfa93762cf0fc39e2cf19e0"));
 
     char signature[SHA256_DIGEST_HEX_SIZE];
     calculate_signature (self, signature, date, string_to_sign);
-    assert_streq (signature, "b97d918cfa904a5beff61c982a1b6f458b799221646efd99d3219ec94cdf2500");
+    assert(streq (signature, "b97d918cfa904a5beff61c982a1b6f458b799221646efd99d3219ec94cdf2500"));
 
     char header[MAX_AUTHORIZATION_LEN];
     aws_sign (
@@ -330,8 +333,11 @@ void aws_sign_test () {
             "Param1=value1&Param2=value2",
             "20150830T123600Z",
             NULL);
-    assert_streq (header,
-                  "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/service/aws4_request, SignedHeaders=host;x-amz-date, Signature=b97d918cfa904a5beff61c982a1b6f458b799221646efd99d3219ec94cdf2500");
+
+    assert(streq (header,
+                  "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/service/aws4_request, SignedHeaders=host;x-amz-date, Signature=b97d918cfa904a5beff61c982a1b6f458b799221646efd99d3219ec94cdf2500"));
 
     aws_sign_destroy (&self);
+
+    printf ("OK\n");
 }

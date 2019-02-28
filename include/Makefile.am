@@ -4,13 +4,9 @@
 ################################################################################
 include_HEADERS = \
     mqless.h \
+    mql_server.h \
     mql_library.h
 
-if ENABLE_DRAFTS
-include_HEADERS += \
-    mql_server.h
-
-endif
 
 
 ################################################################################

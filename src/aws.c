@@ -378,6 +378,8 @@ recv_http_request(void* server) {
 }
 
 void aws_test () {
+    printf (" * aws: ");
+
 //    //  Creating http server for local tests
 //    zsock_t *server = zsock_new_stream (NULL);
 //    int port = zsock_bind (server, "tcp://127.0.0.1:*");
@@ -413,4 +415,5 @@ void aws_test () {
 //    zchunk_destroy (&data);
 //    aws_destroy (&self);
 //    zsock_destroy (&server);
+    printf ("OK\n");
 }

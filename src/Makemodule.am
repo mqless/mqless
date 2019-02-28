@@ -16,15 +16,11 @@ src_libmql_la_SOURCES = \
     src/aws.c \
     src/aws_sign.c \
     src/mailbox.c \
+    src/mql_server.c \
     src/foreign/sha256.h \
     src/foreign/sha256.inc_c \
+    src/foreign/hmac_sha256.h \
     src/platform.h
-
-if ENABLE_DRAFTS
-src_libmql_la_SOURCES += \
-    src/mql_server.c
-
-endif
 
 if ENABLE_DRAFTS
 src_libmql_la_SOURCES += \

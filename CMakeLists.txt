@@ -25,7 +25,32 @@ set(pkg_config_names_private "")
 ########################################################################
 # options
 ########################################################################
-OPTION (ENABLE_DRAFTS "Build and install draft classes and methods" ON)
+if (NOT CMAKE_BUILD_TYPE)
+    if (EXISTS "${SOURCE_DIR}/.git")
+        set (CMAKE_BUILD_TYPE Debug)
+    else ()
+# http://xit0.org/2013/04/cmake-use-git-branch-and-commit-details-in-project/
+# http://stackoverflow.com/questions/6797395/cmake-execute-process-always-fails-with-no-such-file-or-directory-when-i-cal
+        execute_process(
+            COMMAND git rev-parse --show-toplevel
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+            RESULT_VARIABLE git_result
+            OUTPUT_VARIABLE git_root
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        message(STATUS "git workspace root [${git_result}]: ${git_root}")
+        if ( "${git_result}" STREQUAL "0" )
+            set (CMAKE_BUILD_TYPE Debug)
+        else ()
+            set (CMAKE_BUILD_TYPE Release)
+        endif ()
+    endif ()
+endif ()
+if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    OPTION (ENABLE_DRAFTS "Build and install draft classes and methods" ON)
+else ()
+    OPTION (ENABLE_DRAFTS "Build and install draft classes and methods" OFF)
+endif ()
 IF (ENABLE_DRAFTS)
     ADD_DEFINITIONS (-DMQL_BUILD_DRAFT_API)
 ENDIF (ENABLE_DRAFTS)
@@ -159,18 +184,14 @@ message(STATUS "Detected MQL Version - ${MQL_VERSION}")
 set (mql_headers
     include/mql_library.h
     include/mqless.h
+    include/mql_server.h
     src/aws.h
     src/aws_sign.h
     src/mailbox.h
     src/foreign/sha256.h
     src/foreign/sha256.inc_c
+    src/foreign/hmac_sha256.h
 )
-
-IF (ENABLE_DRAFTS)
-    list(APPEND mql_headers
-        include/mql_server.h
-    )
-ENDIF (ENABLE_DRAFTS)
 
 source_group ("Header Files" FILES ${mql_headers})
 install(FILES ${mql_headers} DESTINATION include)
@@ -185,14 +206,8 @@ set (mql_sources
     src/aws.c
     src/aws_sign.c
     src/mailbox.c
+    src/mql_server.c
 )
-
-IF (ENABLE_DRAFTS)
-    list (APPEND mql_sources
-        src/mql_server.c
-    )
-ENDIF (ENABLE_DRAFTS)
-
 IF (ENABLE_DRAFTS)
     list (APPEND mql_sources
         src/mql_private_selftest.c
@@ -441,13 +456,8 @@ if(UNIX)
 endif()
 
 set(TEST_CLASSES
-)
-
-IF (ENABLE_DRAFTS)
-    list (APPEND TEST_CLASSES
     mql_server
-    )
-ENDIF (ENABLE_DRAFTS)
+)
 
 IF (ENABLE_DRAFTS)
     list (APPEND TEST_CLASSES

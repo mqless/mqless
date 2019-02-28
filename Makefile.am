@@ -48,6 +48,7 @@ endif
 EXTRA_DIST += \
     src/foreign/sha256.h \
     src/foreign/sha256.inc_c \
+    src/foreign/hmac_sha256.h \
     src/aws.h \
     src/aws_sign.h \
     src/mailbox.h \
