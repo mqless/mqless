@@ -11,8 +11,8 @@ cache:
 os:
 - linux
 
-#dist:
-#- xenial
+dist:
+- xenial
 
 #services:
 #- docker
@@ -43,7 +43,7 @@ env:
   matrix:
     - BUILD_TYPE=default
     - BUILD_TYPE=default-Werror
-    - BUILD_TYPE=cmake
+#   - BUILD_TYPE=cmake
 #   - BUILD_TYPE=android
 #   - BUILD_TYPE=check-py
 
@@ -87,14 +87,14 @@ addons:
 
 matrix:
   include:
-  - env: BUILD_TYPE=default-with-docs
-    os: linux
-    addons:
-      apt:
-        sources: *pkg_src_zeromq_ubuntu16
-        packages:
-        - *pkg_deps_common
-        - *pkg_deps_doctools
+#  - env: BUILD_TYPE=default-with-docs
+#    os: linux
+#    addons:
+#      apt:
+#        sources: *pkg_src_zeromq_ubuntu16
+#        packages:
+#        - *pkg_deps_common
+#        - *pkg_deps_doctools
   - env: BUILD_TYPE=valgrind
     os: linux
     dist: xenial
@@ -112,21 +112,21 @@ matrix:
         sources: *pkg_src_zeromq_ubuntu16
         packages:
         - *pkg_deps_common
-  - env: BUILD_TYPE=cmake DO_CLANG_FORMAT_CHECK=1 CLANG_FORMAT=clang-format-5.0
-# For non-cmake users, there is an autotools solution with a bit more overhead
-# to have dependencies ready and pass configure script before making this check).
-# Note that the autotools variant will also require dependencies preinstalled to
-# pass its configure script:
-#  - env: BUILD_TYPE=clang-format-check CLANG_FORMAT=clang-format-5.0
-    os: linux
-    dist: xenial
-    addons:
-      apt:
-        sources:
-        - llvm-toolchain-xenial-5.0
-        packages:
-        - clang-5.0
-        - clang-format-5.0
+#  - env: BUILD_TYPE=cmake DO_CLANG_FORMAT_CHECK=1 CLANG_FORMAT=clang-format-5.0
+## For non-cmake users, there is an autotools solution with a bit more overhead
+## to have dependencies ready and pass configure script before making this check).
+## Note that the autotools variant will also require dependencies preinstalled to
+## pass its configure script:
+##  - env: BUILD_TYPE=clang-format-check CLANG_FORMAT=clang-format-5.0
+#    os: linux
+#    dist: xenial
+#    addons:
+#      apt:
+#        sources:
+#        - llvm-toolchain-xenial-5.0
+#        packages:
+#        - clang-5.0
+#        - clang-format-5.0
 #autotools#  - *pkg_deps_prereqs
 
 before_install:
