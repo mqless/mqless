@@ -151,7 +151,7 @@ server_recv_http (mql_server_t* self) {
 
     zsys_info ("Server: new request %s %s", method, url);
 
-    if (zhttp_request_match (self->request, "POST", "/send/%s/%s", &function, &address)) {
+    if (zhttp_request_match (self->request, "POST", "/request/%s/%s", &function, &address)) {
         char *payload = zhttp_request_get_content (self->request);
 
         mailbox_t *mailbox = (mailbox_t *) zhashx_lookup (self->mailboxes, address);
