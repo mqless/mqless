@@ -52,6 +52,7 @@ EXTRA_DIST += \
     src/aws.h \
     src/aws_sign.h \
     src/mailbox.h \
+    src/mql_private.h \
     README.md \
     src/mql_classes.h
 

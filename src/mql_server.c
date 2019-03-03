@@ -15,7 +15,7 @@
 */
 
 #include "mql_classes.h"
-
+#include <jansson.h>
 
 struct _mql_server_t {
     zsock_t* pipe;
@@ -23,6 +23,8 @@ struct _mql_server_t {
     zhttp_server_t *http_server;
     zhttp_request_t *request;
     zhttp_response_t *response;
+    uint64_t next_id;
+    zhashx_t *connections;
     zsock_t* http_worker;
     char endpoint[256];
 
@@ -35,6 +37,9 @@ struct _mql_server_t {
 };
 
 static void s_refresh_credentials_interval (int timer_id, mql_server_t *self);
+
+static mailbox_t *
+s_get_mailbox (mql_server_t *self, const char *address);
 
 static mql_server_t *
 server_new (zconfig_t* config, zsock_t *pipe) {
@@ -53,6 +58,10 @@ server_new (zconfig_t* config, zsock_t *pipe) {
     zsock_connect (self->http_worker, "%s", zhttp_server_options_backend_address (self->http_options));
     self->request = zhttp_request_new ();
     self->response = zhttp_response_new ();
+    self->next_id =  (((uint64_t) rand() <<  0) & 0x00000000FFFFFFFFull) |
+                     (((uint64_t) rand() << 32) & 0xFFFFFFFF00000000ull);
+    self->connections = zhashx_new ();
+    zhashx_set_key_duplicator (self->connections, NULL); // Connection takes ownership of the key
     self->mailboxes = zhashx_new ();
     zhashx_set_destructor (self->mailboxes, (czmq_destructor *) mailbox_destroy);
     self->timerset = ztimerset_new ();
@@ -106,6 +115,7 @@ server_destroy (mql_server_t **self_p) {
         zsock_destroy (&self->http_worker);
         zhttp_server_destroy (&self->http_server);
         zhttp_server_options_destroy (&self->http_options);
+        zhashx_destroy (&self->connections);
 
         ztimerset_destroy (&self->timerset);
         zhashx_destroy (&self->mailboxes);
@@ -132,9 +142,59 @@ server_recv_api (mql_server_t* self) {
         self->terminated = true;
 }
 
-static void
-server_send_response (mql_server_t *self, void **connection, zhttp_response_t *response) {
-    zhttp_response_send (response, self->http_worker, connection);
+
+int
+mql_server_send_error (mql_server_t *self, const char *to, uint32_t status_code, const char* body) {
+    const char *delimiter = strchr (to, '/');
+
+    // We only forward errors to http requests
+    if (delimiter == NULL) {
+        void *connection = zhashx_lookup (self->connections, to);
+
+        if (connection == NULL) {
+            return -1;
+        }
+
+        // TODO: build the response
+
+        zhttp_response_set_status_code (self->response, status_code);
+        zhttp_response_set_content_const (self->response, body);
+        zhttp_response_send (self->response, self->http_worker, &connection);
+
+        zhashx_delete (self->connections, to);
+    }
+}
+
+int
+mql_server_send (mql_server_t *self, const char *to, const char *from, const char *subject, json_t **body) {
+
+    // Check if an http connection
+    if (strncmp ("$http/", to, 6) == 0) {
+        void *connection = zhashx_lookup (self->connections, to);
+
+        if (connection == NULL) {
+            zsys_warning ("Sever: reply to dead http connection from %s", from);
+            json_decref (*body);
+            return -1;
+        }
+
+        json_t *root = json_pack ("{ssssso?}", "from", from, "subject", subject, "body", *body);
+        *body = NULL;
+
+        char *content = json_dumps (root, JSON_COMPACT);
+        json_decref (root);
+
+        zhttp_response_set_status_code (self->response, 200);
+        zhttp_response_set_content (self->response, &content);
+        zhttp_response_send (self->response, self->http_worker, &connection);
+
+        zhashx_delete (self->connections, to);
+    }
+    else {
+        mailbox_t *mailbox = s_get_mailbox (self, to);
+
+        return mailbox_send (mailbox, from, subject, body);
+    }
 }
 
 static void
@@ -144,59 +204,42 @@ server_recv_http (mql_server_t* self) {
     const char* method = zhttp_request_method (self->request);
     const char *url = zhttp_request_url (self->request);
 
-    char* address;
-    char* function;
-    char* from_address;
-    char* seq;
+    char* actor_id;
+    char* actor_type;
+    char* subject;
 
     zsys_info ("Server: new request %s %s", method, url);
 
-    if (zhttp_request_match (self->request, "POST", "/request/%s/%s", &function, &address)) {
-        char *payload = zhttp_request_get_content (self->request);
+    if (zhttp_request_match (self->request, "POST", "/send/%s/%s/%s", &actor_type, &actor_id, &subject)) {
 
-        mailbox_t *mailbox = (mailbox_t *) zhashx_lookup (self->mailboxes, address);
-        if (!mailbox) {
-            mailbox = mailbox_new (address, self->aws, self, (mailbox_callback_fn *) server_send_response);
-            assert (mailbox);
-            zhashx_insert (self->mailboxes, address, mailbox);
+        json_error_t error;
+        json_t *body = json_loads (zhttp_request_content (self->request), 0, &error);
+
+        if (body == NULL) {
+            zsys_warning ("Server: invalid json received");
+            zhttp_response_set_status_code (self->response, 400);
+            zhttp_response_set_content_const (self->response, "{\"error\": \"invalid json\"}");
+            zhttp_response_send (self->response, self->http_worker, &connection);
+            return;
         }
+
+        char *address = zsys_sprintf ("%s/%s", actor_type, actor_id);
+        mailbox_t *mailbox = s_get_mailbox (self, address);
+
+        char *from = zsys_sprintf ("$http/%" PRIu64, self->next_id);
+        self->next_id++;
+
+        // Insert the new connection, hash take ownership of the new from
+        zhashx_insert (self->connections, from, connection);
 
         //  Queuing the message on the worker, the worker is responsible to reply to the client through the return address
         mailbox_send (
                 mailbox,
-                function,
-                MQL_INVOCATION_TYPE_REQUEST_RESPONSE, // TODO: figure out the invocacation type,
-                &payload,
-                connection);
-    }
-    else
-    if (zhttp_request_match (self->request, "POST", "/forward/%s/%s/%s/%s", &from_address, &seq, &function, &address)) {
-        mailbox_t *from_mailbox = (mailbox_t *) zhashx_lookup (self->mailboxes, from_address);
-        if (!from_mailbox) {
-            zsys_warning ("Server: trying to forward non-existed message");
-            return;
-        }
+                from,
+                subject,
+                &body);
 
-        mailbox_t *to_mailbox = (mailbox_t *) zhashx_lookup (self->mailboxes, address);
-        if (!to_mailbox) {
-            to_mailbox = mailbox_new (address, self->aws, self, (mailbox_callback_fn *) server_send_response);
-            assert (to_mailbox);
-            zhashx_insert (self->mailboxes, address, to_mailbox);
-        }
-
-        char *payload = zhttp_request_get_content (self->request);
-
-        //  Queuing the message on the worker, the worker is responsible to reply to the client through the return address
-        int rc = mailbox_forward (from_mailbox, to_mailbox, function, &payload);
-
-        if (rc != 0) {
-            zhttp_response_set_status_code (self->response, 404);
-            zhttp_response_set_content_const (self->response, "No message with such id was found");
-        }
-        else
-            zhttp_response_set_status_code (self->response, 200);
-
-        zhttp_response_send (self->response, self->http_worker, &connection);
+        zstr_free (&address);
     }
     else {
         zsys_warning ("Server: not found %s %s", method, url);
@@ -228,10 +271,18 @@ mql_server_actor (zsock_t *pipe, void *arg) {
     server_destroy (&self);
 }
 
-const char *
-mql_server_endpoint (mql_server_t *self) {
-    return self->endpoint;
+static mailbox_t *
+s_get_mailbox (mql_server_t *self, const char *address) {
+    mailbox_t *mailbox = (mailbox_t *) zhashx_lookup (self->mailboxes, address);
+    if (!mailbox) {
+        mailbox = mailbox_new (address, self->aws, self);
+        assert (mailbox);
+        zhashx_insert (self->mailboxes, address, mailbox);
+    }
+
+    return mailbox;
 }
+
 
 //  --------------------------------------------------------------------------
 //  Create a new mql_server

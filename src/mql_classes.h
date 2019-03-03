@@ -20,8 +20,6 @@
 //  External API
 #include "../include/mqless.h"
 
-//  Extra headers
-
 //  Opaque class structures to allow forward references
 #ifndef AWS_T_DEFINED
 typedef struct _aws_t aws_t;
@@ -35,6 +33,9 @@ typedef struct _aws_sign_t aws_sign_t;
 typedef struct _mailbox_t mailbox_t;
 #define MAILBOX_T_DEFINED
 #endif
+
+//  Extra headers
+#include "mql_private.h"
 
 //  Internal API
 

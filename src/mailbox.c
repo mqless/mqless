@@ -1,139 +1,81 @@
 #include "mql_classes.h"
 #include <string.h>
+#include <jansson.h>
 
 typedef struct {
     mailbox_t *parent;
-    char *function;
-    int invocation_type;
-    char* payload;
-    void* connection;
-    bool forwarded;
+    char *from;
+    char *subject;
+    json_t *body;
+    void *connection;
 } mailbox_item_t;
 
 struct _mailbox_t {
     char *address;
+    char *actor_type;
     zlistx_t *queue;
     mql_server_t *server;
-    mailbox_callback_fn *callback;
     aws_t *aws;
     bool inprogress;
-    mailbox_item_t *current;
 };
 
 static void mailbox_item_callback (mailbox_item_t *self, zhttp_response_t *response);
 
 static mailbox_item_t *lambda_request_new (mailbox_t *parent,
-                                           const char *function,
-                                           int invocation_type,
-                                           char* payload, void* connection) {
+                                           const char *from,
+                                           const char *subject,
+                                           json_t *body) {
     mailbox_item_t *self = (mailbox_item_t *) zmalloc (sizeof (mailbox_item_t));
     self->parent = parent;
-    self->function = strdup (function);
-    self->invocation_type = invocation_type;
-    self->payload = payload;
-    self->connection = connection;
-    self->forwarded = false;
+    self->from = strdup (from);
+    self->subject = strdup (subject);
+    self->body = body;
 
     return self;
 }
 
 static void mailbox_item_destroy (mailbox_item_t **self_p) {
     mailbox_item_t *self = *self_p;
-    zstr_free (&self->function);
-    zstr_free (&self->payload);
+    zstr_free (&self->from);
+    zstr_free (&self->subject);
+
+    if (self->body)
+        json_decref (self->body);
+    self->body = NULL;
+
     free (self);
     *self_p = NULL;
 }
 
 static char *
 mailbox_item_create_content (mailbox_item_t *self) {
-    static const char* address_key = "{\"header\":{\"address\":\"";
-    static const char* id_key = "\",\"id\":\"";
-    static const char* type_key = "\",\"type\":\"";
-    static const char* endpoint_key = "\",\"endpoint\":\"";
-    static const char* payload_key = "\"},\"payload\":";
-    static const char* close_bracket = "}";
-    size_t address_key_size = strlen(address_key);
-    size_t id_key_size = strlen(id_key);
-    size_t type_key_size = strlen (type_key);
-    size_t endpoint_key_size = strlen (endpoint_key);
-    size_t payload_key_size = strlen(payload_key);
-    size_t close_bracket_size = strlen(close_bracket);
 
-    int seq = abs (rand ());
-    size_t id_size = (size_t) snprintf (NULL, 0, "%s/%d", self->parent->address, seq);
+    json_t *root = json_pack ("{ssssssso?}", "subject",
+        self->subject, "from", self->from, "address", self->parent->address, "body", self->body);
+    self->body = NULL;
 
-    const char *endpoint = mql_server_endpoint (self->parent->server);
-    const char *payload = self->payload == NULL ? "{}" : self->payload;
-
-    size_t payload_size = strlen(payload);
-
-    size_t content_size =
-            address_key_size +
-            strlen(self->parent->address) +
-            id_key_size +
-            id_size +
-            type_key_size +
-            strlen (self->function) +
-            endpoint_key_size +
-            strlen (endpoint) +
-            payload_key_size +
-            payload_size +
-            close_bracket_size;
-
-    char* content = (char*) malloc (content_size + 1);
-    char* needle = content;
-
-    memcpy (needle, address_key, address_key_size);
-    needle += address_key_size;
-
-    memcpy (needle, self->parent->address, strlen (self->parent->address));
-    needle += strlen (self->parent->address);
-
-    memcpy (needle, id_key, id_key_size);
-    needle += id_key_size;
-
-    needle += sprintf (needle, "%s/%d", self->parent->address, seq);
-
-    memcpy (needle, type_key, type_key_size);
-    needle += type_key_size;
-
-    memcpy (needle, self->function, strlen (self->function));
-    needle += strlen (self->function);
-
-    memcpy (needle, endpoint_key, endpoint_key_size);
-    needle += endpoint_key_size;
-
-    memcpy (needle, endpoint, strlen (endpoint));
-    needle += strlen (endpoint);
-
-    memcpy (needle, payload_key, payload_key_size);
-    needle += payload_key_size;
-
-    memcpy (needle, payload, payload_size);
-    needle += payload_size;
-
-    memcpy (needle, close_bracket, close_bracket_size);
-    needle += close_bracket_size;
-
-    *needle = '\0';
-
-    assert (needle - content == content_size);
+    char *content = json_dumps (root, JSON_COMPACT);
+    json_decref (root);
 
     return content;
 }
 
 mailbox_t *
-mailbox_new (const char *address, aws_t *aws, mql_server_t *server, mailbox_callback_fn *callback) {
+mailbox_new (const char *address, aws_t *aws, mql_server_t *server) {
     mailbox_t *self = (mailbox_t *) zmalloc (sizeof (mailbox_t));
     assert (self);
     self->address = strdup (address);
+
+    const char *delimiter = strchr (address, '/');
+    assert (delimiter);
+
+    self->actor_type = (char *) zmalloc (delimiter - address + 1);
+    memcpy (self->actor_type, address, delimiter - address);
 
     self->queue = zlistx_new ();
     zlistx_set_destructor (self->queue, (zlistx_destructor_fn *) mailbox_item_destroy);
 
     self->server = server;
-    self->callback = callback;
     self->aws = aws;
     self->inprogress = false;
 
@@ -143,6 +85,7 @@ mailbox_new (const char *address, aws_t *aws, mql_server_t *server, mailbox_call
 void mailbox_destroy (mailbox_t **self_p) {
     mailbox_t *self = *self_p;
     zstr_free (&self->address);
+    zstr_free (&self->actor_type);
     zlistx_destroy (&self->queue);
 
     free (self);
@@ -155,39 +98,146 @@ static void mailbox_next (mailbox_t *self) {
     mailbox_item_t *next = (mailbox_item_t *) zlistx_detach_cur (self->queue);
 
     if (next) {
-        zsys_info ("mailbox: invoking function. address = %s, function: %s", self->address, next->function);
+        zsys_info ("mailbox: invoking function. address: %s, subject: %s", self->address, next->subject);
         self->inprogress = true;
-        self->current = next;
-        char* content = mailbox_item_create_content (next);
+        char *content = mailbox_item_create_content (next);
 
-        aws_invoke_lambda (self->aws, next->function, &content,
-                (aws_lambda_callback_fn*)mailbox_item_callback, next);
-    } else {
+        aws_invoke_lambda (self->aws, self->actor_type, &content,
+                           (aws_lambda_callback_fn *) mailbox_item_callback, next);
+    } else
         self->inprogress = false;
-        self->current = NULL;
-    }
 }
 
-static void mailbox_item_callback (mailbox_item_t *self, zhttp_response_t *response) {
-    zsys_info ("mailbox: function completed. address: %s, status code: %d, function: %s",
-               self->parent->address, zhttp_response_status_code (response),
-               self->function);
+static int mailbox_item_send_message (mailbox_item_t *self, json_t *message, const char *from) {
+    if (!json_is_object (message)) {
+        zsys_warning ("Mailbox: Actor %s returned invalid message. subject = %s", self->parent->actor_type, self->subject);
+        mql_server_send_error (self->parent->server, self->from, 400, "{\"body\": \"Invalid message\"}");
+        return -1;
+    }
 
-    if (self->invocation_type == MQL_INVOCATION_TYPE_REQUEST_RESPONSE && !self->forwarded) {
-        byte source;
+    json_t *to = json_object_get (message, "to");
+    json_t *body = json_object_get (message, "body");
+    json_t *subject = json_object_get (message, "subject");
 
-        uint32_t status_code = zhttp_response_status_code (response);
-        if (status_code >= 200 && status_code < 300)
-            source = MQL_SOURCE_FUNCTION;
-        else {
-            // TODO: we need to fetch the FunctionError header from the response in order to know
-            // if the source is provider or function
-            source = MQL_SOURCE_PLATFORM;
+    if (to == NULL || !json_is_string (to) || subject == NULL || !json_is_string (subject)) {
+        zsys_warning ("Mailbox: Actor %s returned invalid message. Subject = %s", self->parent->actor_type, self->subject);
+        mql_server_send_error (self->parent->server, self->from, 400, "{\"body\": \"Invalid message\"}");
+        return -1;
+    }
+
+    const char *to_str = json_string_value (to);
+    const char *subject_str = json_string_value (subject);
+
+    if (body)
+        json_incref (body);
+
+    mql_server_send (self->parent->server, to_str, from, subject_str, &body);
+
+    return 0;
+}
+
+static int mailbox_item_parse_json (mailbox_item_t *self, zhttp_response_t *response) {
+    json_error_t error;
+    json_t *root = json_loads (zhttp_response_content (response), 0, &error);
+
+    if (root == NULL) {
+        json_decref (root);
+        return -1;
+    }
+
+    int rc;
+
+    json_t *send = json_object_get (root, "send");
+    if (send) {
+        // Send can either be an object or array
+        if (json_is_object (send)) {
+            rc = mailbox_item_send_message (self, send, self->parent->address);
+            if (rc != 0) {
+                json_decref (root);
+                return rc;
+            }
+        } else if (json_is_array (send)) {
+            size_t index;
+            json_t *value;
+            json_array_foreach (send, index, value) {
+                rc = mailbox_item_send_message (self, value, self->parent->address);
+                if (rc != 0) {
+                    json_decref (root);
+                    return rc;
+                }
+            }
+        } else {
+            zsys_error ("Mailbox: Invalid send returned from actor. address: %s, subject: %s", self->parent->address,
+                        self->subject);
+            json_decref (root);
+            return -1;
+        }
+    }
+
+    json_t *forward = json_object_get (root, "forward");
+
+    // Returned json can be forward or a reply, not both
+    if (forward) {
+        rc = mailbox_item_send_message (self, forward, self->from);
+        if (rc != 0) {
+            json_decref (root);
+            return rc;
+        }
+    }
+    else {
+        json_t *body = json_object_get (root, "body");
+        json_t *subject = json_object_get (root, "subject");
+
+        // If body or subject it is an immediate reply
+        if (subject) {
+            const char *subject_str = json_string_value (subject);
+
+            if (body)
+                json_incref (body);
+
+            mql_server_send (self->parent->server, self->from, self->parent->address, subject_str, &body);
         }
 
-        // TODO: dont pass the request as is, make msg object and pass it. In order to support other transport
+        if (body && !subject) {
+            zsys_error ("Mailbox: subject is mandatory. address: %s", self->parent->address);
+            json_decref (root);
+            return -1;
+        }
+    }
 
-        self->parent->callback (self->parent->server, &self->connection, response);
+    json_decref (root);
+
+    return 0;
+}
+
+
+static void mailbox_item_callback (mailbox_item_t *self, zhttp_response_t *response) {
+    zsys_info ("mailbox: function completed. address: %s, subject: %s, status code: %d",
+               self->parent->address,
+               self->subject,
+               zhttp_response_status_code (response));
+
+    zhash_t *headers = zhttp_response_headers (response);
+    bool has_error = zhash_lookup (headers, "X-Amz-Function-Error") != NULL || zhash_lookup (headers, "x-amz-function-error");
+
+    uint32_t status_code = zhttp_response_status_code (response);
+    if (status_code >= 300 || has_error) {
+        if (status_code >= 200 && status_code < 300)
+            status_code = 400;
+
+        mql_server_send_error (self->parent->server, self->from, status_code, zhttp_response_content (response));
+
+        mailbox_next (self->parent);
+        mailbox_item_destroy (&self);
+        return;
+    }
+
+    int rc = mailbox_item_parse_json (self, response);
+
+    if (rc != 0) {
+        zsys_error ("Mailbox: Invalid json returned from actor. address: %s, from: %s, subject: %s",
+                    self->parent->address, self->from, self->subject);
+        mql_server_send_error (self->parent->server, self->from, 400, "{\"body\": \"Invalid json\"}");
     }
 
     mailbox_next (self->parent);
@@ -196,37 +246,19 @@ static void mailbox_item_callback (mailbox_item_t *self, zhttp_response_t *respo
 
 int mailbox_send (
         mailbox_t *self,
-        const char *function,
-        int invocation_type,
-        char **payload,
-        void* connection) {
+        const char *from,
+        const char *subject,
+        json_t **body) {
 
-    mailbox_item_t *item = lambda_request_new (self, function, invocation_type, *payload, connection);
+    mailbox_item_t *item = lambda_request_new (self, from, subject, *body);
     zlistx_add_end (self->queue, item);
 
-    zsys_info ("mailbox: new function request. address: %s, function: %s", self->address, function);
+    zsys_info ("mailbox: new message. address: %s, from: %s, subject: %s", self->address, from, subject);
 
     if (!self->inprogress)
         mailbox_next (self);
 
-    *payload = NULL;
+    *body = NULL;
 
     return 0;
-}
-
-int mailbox_forward (mailbox_t *self,
-                     mailbox_t *to,
-                     const char *function,
-                     char **payload) {
-
-    if (!self->inprogress) {
-        zstr_free (payload);
-        return -1;
-    }
-
-    assert (self->current);
-
-    self->current->forwarded = true;
-
-    return mailbox_send (to, function, self->current->invocation_type, payload, self->current->connection);
 }

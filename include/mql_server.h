@@ -24,9 +24,6 @@ MQL_EXPORT zactor_t *
 MQL_EXPORT void
     mql_server_destroy (zactor_t **self_p);
 
-MQL_PRIVATE const char *
-    mql_server_endpoint (mql_server_t *self);
-
 //  Self test of this actor
 MQL_EXPORT void
     mql_server_test (bool verbose);

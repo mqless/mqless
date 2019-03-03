@@ -3,24 +3,16 @@
 
 #include "mql_classes.h"
 
-typedef void (mailbox_callback_fn) (void *server, void **connection, zhttp_response_t* response);
-
 typedef struct _mailbox_t mailbox_t;
 
-mailbox_t* mailbox_new (const char* address, aws_t *aws, mql_server_t *server, mailbox_callback_fn *callback);
+mailbox_t* mailbox_new (const char *address, aws_t *aws, mql_server_t *server);
 
 void mailbox_destroy (mailbox_t  **self_p);
 
 int mailbox_send (mailbox_t *self,
-                  const char *function,
-                  int invocation_type,
-                  char **payload,
-                  void* connection);
-
-int mailbox_forward (mailbox_t *self,
-                     mailbox_t *to,
-                     const char *function,
-                     char **payload);
+                  const char *from,
+                  const char *subject,
+                  json_t **body);
 
 #endif
 

@@ -15,12 +15,14 @@
     <version major = "0" minor = "1" />
     <abi current = "0" revision = "1" age = "0" />
     <use project = "czmq" />
-    <use project = "jansson" implied = "1" />
+    <use project = "jansson" />
 
     <target name = "travis" />
 
     <main name = "mqless" service = "1" />
     <main name = "mqless_client" />
+
+    <actor name = "mql_server" state = "stable">mqless server implementation</actor>
 
     <class name = "aws" private = "1" state = "stable">AWS client</class>
     <class name = "aws_sign" private = "1" state = "stable">AWS signature</class>
@@ -30,5 +32,6 @@
     <extra name = "foreign/sha256.inc_c" />
     <extra name = "foreign/hmac_sha256.h" />
 
-    <actor name = "mql_server" state = "stable">mqless server implementation</actor>
+    <header name = "mql_private" private = "1" />
+
 </project>

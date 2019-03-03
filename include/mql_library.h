@@ -19,6 +19,7 @@
 
 //  External dependencies
 #include <czmq.h>
+#include <jansson.h>
 
 //  MQL version macros for compile-time API detection
 #define MQL_VERSION_MAJOR 0
